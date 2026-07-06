@@ -24,13 +24,13 @@ Complete an event and create the next one is a single DB transaction.
 
 ## Main entities
 
-- Contact. Name, birthday, position, company, contacts, data, logs.
+- Person. Name, birthday, position, company, contacts, data, logs.
 - Company. Name, country, data.
 - Campaign. Code, name, version, type, enrollment limiters, steps, instructions.
   - Types: finite, recurring
-  - Recurrence: anchor = contact.birthday, interval = (years = 1)
-  - Enrollment limiter: by = contact.company count = 1
-- Enrollment. Represents a contact's participation in a campaign.
+  - Recurrence: anchor = person.birthday, interval = (years = 1)
+  - Enrollment limiter: by = person.company count = 1
+- Enrollment. Represents a person's participation in a campaign.
   - States: active, completed, stopped
 - Event. Represents either a scheduled action or a historical interaction.
   - States: planned, done, skipped
@@ -47,4 +47,4 @@ Provides the queue: overdue events and events due today.
 
 ### get_event_context
 
-Provides context of the event: event, contact, company, campaign and current step, instructions, communication history.
+Provides context of the event: event, person, company, campaign and current step, instructions, communication history.
