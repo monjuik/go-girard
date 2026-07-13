@@ -1,0 +1,59 @@
+{{define "layout_start"}}
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{{.Title}} - Go Girard</title>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+        />
+        <style>
+            body {
+                min-height: 100vh;
+            }
+
+            .app-shell {
+                display: grid;
+                grid-template-columns: 6rem minmax(0, 1fr);
+                gap: var(--pico-spacing);
+                align-items: start;
+                padding-block: var(--pico-spacing);
+            }
+
+            .app-menu {
+                position: sticky;
+                top: var(--pico-spacing);
+            }
+
+            @media (max-width: 768px) {
+                .app-shell {
+                    grid-template-columns: 1fr;
+                }
+
+                .app-menu {
+                    position: static;
+                    order: -1;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container-fluid app-shell">
+            <aside class="app-menu">
+                <strong>Go Girard</strong>
+                <nav>
+                    <ul>
+                        <li>
+                            <a href="/persons" aria-current="page">Persons</a>
+                        </li>
+                    </ul>
+                </nav>
+            </aside>
+
+            <main>{{end}} {{define "layout_end"}}</main>
+        </div>
+    </body>
+</html>
+{{end}}

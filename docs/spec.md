@@ -2,12 +2,13 @@
 
 ## How am I doing it? In the most boring way possible!
 
-- KISS: as simple as possible. Keep the core minimal, clean, testable, and maintainable.
-- Use external dependencies only when they are truly necessary.
+- KISS: as simple as possible. Keep the core minimal, clean, testable, and maintainable
+- Use external dependencies only when they are truly necessary
   - https://github.com/yuin/goldmark for Markdown parsing
-- DRY.
-- Lean to CQRS, DDD, and Clean Architecture principles in Go.
-- Configuration lives in a file. The app reads it at startup and keeps it in memory.
+- DRY
+- Lean to CQRS, DDD, and Clean Architecture principles in Go
+- Product configuration lives in a file. The app reads it at startup and keeps it in memory
+- Technical configuration uses flags with default values
 
 One executable file.
 
@@ -21,10 +22,18 @@ Embedded SQLite. Singleton writer.
 
 Add columns only when needed for search, store auxiliary data in JSON-fields.
 
+### IDs
+
+Entity IDs use Snowflake-style 64-bit integers, reasons:
+- SQLite stores them efficiently as `INTEGER`
+- IDs are generated in the application, keeps them unpredictable for MCP
+- Snowflake IDs are time-sortable, which is useful for default ordering and indexes
+- UUIDv7 is 128-bit and would require `TEXT` or `BLOB(16)` storage in SQLite
+
 ## Main entities
 
-- Person. Name, birthday, photo, position, company, contacts, note, audit.
-- Company. Name, country, audit.
+- Person. Name, birthday, photo, position, company, contacts, note, audit
+- Company. Name, country, audit
 - Campaign. Playbook with instructions. Code, name, version, type, enrollment limiters, steps, instructions:
   - Types: finite, recurring
   - Recurrence: anchor = person.birthday, interval = (years = 1)
@@ -32,7 +41,7 @@ Add columns only when needed for search, store auxiliary data in JSON-fields.
   - Steps are ordered and describe the intention for the given stage
 - Enrollment. Represents a person's participation in a campaign. Current state, next action, intention:
   - States: active, completed, stopped
-  - Intention guides my next action with this person.
+  - Intention guides my next action with this person
 
 Notes are edited and stored as Markdown.
 Audit stores the modification history for the current entity: created, updated etc.

@@ -1,0 +1,49 @@
+{{define "persons"}} {{template "layout_start" .}}
+
+<header>
+    <hgroup>
+        <h1>Persons</h1>
+        <p>Contacts for outreach and follow-up.</p>
+    </hgroup>
+</header>
+
+<section>
+    <form method="post" action="/persons/filter">
+        <fieldset role="group">
+            <input
+                type="search"
+                name="q"
+                placeholder="Search by name, company, position"
+                disabled
+            />
+            <button type="submit" disabled>Search</button>
+        </fieldset>
+    </form>
+
+    <figure>
+        <table class="striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Position</th>
+                    <th>Company</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Data}}
+                <tr>
+                    <td><a href="/persons/{{.ID}}">{{.Name}}</a></td>
+                    <td>{{.Position}}</td>
+                    <td>{{if .Company}}{{.Company}}{{else}}&mdash;{{end}}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="3">No persons found.</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </figure>
+</section>
+
+{{template "layout_end" .}} {{end}}
