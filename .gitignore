@@ -24,3 +24,7 @@ go.work.sum
 
 # env file
 .env
+/go-girard.db
+/go-girard.db-shm
+/go-girard.db-wal
+/main

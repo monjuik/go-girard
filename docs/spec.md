@@ -30,6 +30,25 @@ Entity IDs use Snowflake-style 64-bit integers, reasons:
 - Snowflake IDs are time-sortable, which is useful for default ordering and indexes
 - UUIDv7 is 128-bit and would require `TEXT` or `BLOB(16)` storage in SQLite
 
+Useful commands to work with the db:
+```bash
+sqlite3 'file:go-girard.db?mode=ro'
+sqlite3 'file:go-girard.db'
+sqlite> .headers on
+sqlite> .mode box
+sqlite> .tables
+sqlite> SELECT * FROM migration;
+```
+
+Test data:
+```sql
+INSERT INTO company (id, name)
+VALUES (1, 'Northwind Logistics');
+
+INSERT INTO person (id, name, position, company)
+VALUES (101, 'Anna Petrova', 'Head of Operations', 1);
+```
+
 ## Main entities
 
 - Person. Name, birthday, photo, position, company, contacts, note, audit

@@ -8,15 +8,15 @@
 </header>
 
 <section>
-    <form method="post" action="/persons/filter">
+    <form method="get" action="/persons">
         <fieldset role="group">
             <input
                 type="search"
                 name="q"
+                value="{{.Data.Query}}"
                 placeholder="Search by name, company, position"
-                disabled
             />
-            <button type="submit" disabled>Search</button>
+            <button type="submit">Search</button>
         </fieldset>
     </form>
 
@@ -30,7 +30,7 @@
                 </tr>
             </thead>
             <tbody>
-                {{range .Data}}
+                {{range .Data.Persons}}
                 <tr>
                     <td><a href="/persons/{{.ID}}">{{.Name}}</a></td>
                     <td>{{.Position}}</td>
@@ -44,6 +44,23 @@
             </tbody>
         </table>
     </figure>
+    <div role="group" aria-label="Persons pagination">
+        {{if .Data.PreviousURL}}
+        <a href="{{.Data.PreviousURL}}" role="button" class="secondary">
+            Previous
+        </a>
+        {{else}}
+        <button type="button" class="secondary" disabled>Previous</button>
+        {{end}}
+
+        {{if .Data.NextURL}}
+        <a href="{{.Data.NextURL}}" role="button" class="secondary">
+            Next
+        </a>
+        {{else}}
+        <button type="button" class="secondary" disabled>Next</button>
+        {{end}}
+    </div>
 </section>
 
 {{template "layout_end" .}} {{end}}

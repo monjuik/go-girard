@@ -10,9 +10,9 @@ type App struct {
 	personQueries contacts.PersonQueries
 }
 
-func NewApp() *App {
+func NewApp(personQueries contacts.PersonQueries) *App {
 	return &App{
-		personQueries: contacts.NewStubPersonQueries(),
+		personQueries: personQueries,
 	}
 }
 
