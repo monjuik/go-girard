@@ -137,8 +137,14 @@ var migrations = []migration{
 				id       INTEGER PRIMARY KEY,
 				name     TEXT NOT NULL,
 				position TEXT NOT NULL,
-				company  INTEGER REFERENCES company(id)
+				company  INTEGER REFERENCES company(id),
+				deleted  INTEGER NOT NULL DEFAULT 0
+						CHECK (deleted IN (0, 1))
 			);
+
+			CREATE UNIQUE INDEX person_name
+			ON person (name COLLATE NOCASE)
+			WHERE deleted = 0;
 		`,
 	},
 }

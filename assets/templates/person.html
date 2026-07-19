@@ -1,0 +1,33 @@
+{{define "person"}} {{template "layout_start" .}}
+
+  <header>
+      <hgroup>
+          <h1>{{.Data.Person.Name}}</h1>
+      </hgroup>
+  </header>
+
+  {{if .Data.Saved}}
+  <article role="status">Person saved.</article>
+  {{end}}
+
+  <dl>
+      <dt>Position</dt>
+      <dd>
+          {{if .Data.Person.Position}}
+              {{.Data.Person.Position}}
+          {{else}}
+              &mdash;
+          {{end}}
+      </dd>
+  </dl>
+
+  <footer class="actions">
+      <a href="/persons/{{.Data.Person.ID}}/edit" role="button">
+          Edit
+      </a>
+      <button type="button" class="secondary outline" disabled>
+          Delete
+      </button>
+  </footer>
+
+  {{template "layout_end" .}} {{end}}

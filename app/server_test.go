@@ -5,15 +5,53 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/monjuik/go-girard/common"
 	"github.com/monjuik/go-girard/contacts"
 )
 
 type recordingPersonQueries struct {
-	filter contacts.PersonsFilter
-	rows   []contacts.PersonRowView
+	filter   contacts.PersonsFilter
+	rows     []contacts.PersonRowView
+	id       common.ID
+	person   contacts.PersonView
+	err      error
+	getCalls int
+}
+
+type recordingPersonCommands struct {
+	createInput contacts.PersonInput
+	createID    common.ID
+	createErr   error
+	createCalls int
+
+	updateID    common.ID
+	updateInput contacts.PersonInput
+	updateErr   error
+	updateCalls int
+}
+
+func (c *recordingPersonCommands) CreatePerson(
+	ctx context.Context,
+	input contacts.PersonInput,
+) (common.ID, error) {
+	c.createCalls++
+	c.createInput = input
+	return c.createID, c.createErr
+}
+
+func (c *recordingPersonCommands) UpdatePerson(
+	ctx context.Context,
+	id common.ID,
+	input contacts.PersonInput,
+) error {
+	c.updateCalls++
+	c.updateID = id
+	c.updateInput = input
+	return c.updateErr
 }
 
 func (q *recordingPersonQueries) ListPersonRows(
@@ -22,6 +60,15 @@ func (q *recordingPersonQueries) ListPersonRows(
 ) ([]contacts.PersonRowView, error) {
 	q.filter = filter
 	return q.rows, nil
+}
+
+func (q *recordingPersonQueries) GetPerson(
+	ctx context.Context,
+	id common.ID,
+) (contacts.PersonView, error) {
+	q.getCalls++
+	q.id = id
+	return q.person, q.err
 }
 
 func TestPersonsPage(t *testing.T) {
@@ -36,7 +83,7 @@ func TestPersonsPage(t *testing.T) {
 		},
 	}
 
-	server, err := NewServer(0, queries)
+	server, err := NewServer(0, queries, &recordingPersonCommands{})
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -67,6 +114,10 @@ func TestPersonsPage(t *testing.T) {
 	if !strings.Contains(body, "Northwind Logistics") {
 		t.Fatal("GET /persons body does not contain company")
 	}
+
+	if !strings.Contains(body, `href="/persons/new"`) {
+		t.Fatal("GET /persons body does not contain new person URL")
+	}
 }
 
 func TestPersonsPageSearchAndPaging(t *testing.T) {
@@ -80,7 +131,7 @@ func TestPersonsPageSearchAndPaging(t *testing.T) {
 		})
 	}
 
-	server, err := NewServer(0, queries)
+	server, err := NewServer(0, queries, &recordingPersonCommands{})
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -137,7 +188,7 @@ func TestPersonsPageSearchAndPaging(t *testing.T) {
 func TestPersonsPageRejectsInvalidSkip(t *testing.T) {
 	queries := &recordingPersonQueries{}
 
-	server, err := NewServer(0, queries)
+	server, err := NewServer(0, queries, &recordingPersonCommands{})
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -161,5 +212,474 @@ func TestPersonsPageRejectsInvalidSkip(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func TestPersonPages(t *testing.T) {
+	queries := &recordingPersonQueries{
+		person: contacts.PersonView{
+			ID:       "101",
+			Name:     "Anna Petrova",
+			Position: "Engineer",
+		},
+	}
+
+	server, err := NewServer(0, queries, &recordingPersonCommands{})
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/persons/new", nil)
+	response := httptest.NewRecorder()
+	server.httpServer.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"GET /persons/new status = %d, want %d",
+			response.Code,
+			http.StatusOK,
+		)
+	}
+
+	body := response.Body.String()
+	for _, want := range []string{
+		"New person",
+		`action="/persons"`,
+		"Create person",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("GET /persons/new body does not contain %q", want)
+		}
+	}
+
+	if count := strings.Count(body, "<!doctype html>"); count != 1 {
+		t.Fatalf("GET /persons/new document count = %d, want 1", count)
+	}
+
+	request = httptest.NewRequest(
+		http.MethodGet,
+		"/persons/101?saved=1",
+		nil,
+	)
+	response = httptest.NewRecorder()
+	server.httpServer.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"GET /persons/101 status = %d, want %d",
+			response.Code,
+			http.StatusOK,
+		)
+	}
+	if queries.id != common.ID(101) {
+		t.Fatalf("GetPerson() id = %d, want 101", queries.id)
+	}
+
+	body = response.Body.String()
+	for _, want := range []string{
+		"Anna Petrova",
+		"Engineer",
+		`href="/persons/101/edit"`,
+		"Person saved.",
+		"Delete",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("GET /persons/101 body does not contain %q", want)
+		}
+	}
+
+	request = httptest.NewRequest(
+		http.MethodGet,
+		"/persons/101/edit",
+		nil,
+	)
+	response = httptest.NewRecorder()
+	server.httpServer.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"GET /persons/101/edit status = %d, want %d",
+			response.Code,
+			http.StatusOK,
+		)
+	}
+
+	body = response.Body.String()
+	for _, want := range []string{
+		"Edit person",
+		`action="/persons/101"`,
+		`value="Anna Petrova"`,
+		`value="Engineer"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf(
+				"GET /persons/101/edit body does not contain %q",
+				want,
+			)
+		}
+	}
+
+	queries.err = contacts.ErrPersonNotFound
+
+	request = httptest.NewRequest(http.MethodGet, "/persons/999", nil)
+	response = httptest.NewRecorder()
+	server.httpServer.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf(
+			"GET /persons/999 status = %d, want %d",
+			response.Code,
+			http.StatusNotFound,
+		)
+	}
+}
+
+func TestPersonPagesRejectInvalidID(t *testing.T) {
+	queries := &recordingPersonQueries{}
+	commands := &recordingPersonCommands{}
+
+	server, err := NewServer(0, queries, commands)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	values := url.Values{"name": {"Anna Petrova"}}
+
+	for _, id := range []string{"0", "-1", "invalid"} {
+		t.Run(id, func(t *testing.T) {
+			getCalls := queries.getCalls
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/persons/"+id,
+				nil,
+			)
+			response := httptest.NewRecorder()
+			server.httpServer.Handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusNotFound {
+				t.Fatalf(
+					"GET /persons/%s status = %d, want %d",
+					id,
+					response.Code,
+					http.StatusNotFound,
+				)
+			}
+			if queries.getCalls != getCalls {
+				t.Fatalf("GET /persons/%s reached GetPerson", id)
+			}
+
+			updateCalls := commands.updateCalls
+			response = postForm(
+				server.httpServer.Handler,
+				"/persons/"+id,
+				values,
+			)
+
+			if response.Code != http.StatusNotFound {
+				t.Fatalf(
+					"POST /persons/%s status = %d, want %d",
+					id,
+					response.Code,
+					http.StatusNotFound,
+				)
+			}
+			if commands.updateCalls != updateCalls {
+				t.Fatalf("POST /persons/%s reached UpdatePerson", id)
+			}
+		})
+	}
+}
+
+func TestPersonFormRejectsLargeBody(t *testing.T) {
+	commands := &recordingPersonCommands{}
+	server, err := NewServer(
+		0,
+		&recordingPersonQueries{},
+		commands,
+	)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	tests := []struct {
+		name  string
+		path  string
+		calls func() int
+	}{
+		{
+			name: "create",
+			path: "/persons",
+			calls: func() int {
+				return commands.createCalls
+			},
+		},
+		{
+			name: "update",
+			path: "/persons/101",
+			calls: func() int {
+				return commands.updateCalls
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callsBefore := tt.calls()
+			request := httptest.NewRequest(
+				http.MethodPost,
+				tt.path,
+				strings.NewReader(
+					"name="+strings.Repeat("a", maxPersonFormBodySize),
+				),
+			)
+			request.Header.Set(
+				"Content-Type",
+				"application/x-www-form-urlencoded",
+			)
+			response := httptest.NewRecorder()
+
+			server.httpServer.Handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf(
+					"POST %s status = %d, want %d",
+					tt.path,
+					response.Code,
+					http.StatusRequestEntityTooLarge,
+				)
+			}
+			if tt.calls() != callsBefore {
+				t.Fatalf("POST %s reached person command", tt.path)
+			}
+		})
+	}
+}
+
+func TestCreatePerson(t *testing.T) {
+	commands := &recordingPersonCommands{
+		createID: common.ID(101),
+	}
+
+	server, err := NewServer(
+		0,
+		&recordingPersonQueries{},
+		commands,
+	)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	values := url.Values{
+		"name":     {"  Anna Petrova  "},
+		"position": {"  Engineer  "},
+	}
+
+	response := postForm(
+		server.httpServer.Handler,
+		"/persons",
+		values,
+	)
+
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf(
+			"POST /persons status = %d, want %d",
+			response.Code,
+			http.StatusSeeOther,
+		)
+	}
+	if location := response.Header().Get("Location"); location != "/persons/101?saved=1" {
+		t.Fatalf("POST /persons Location = %q", location)
+	}
+
+	wantInput := contacts.PersonInput{
+		Name:     "  Anna Petrova  ",
+		Position: "  Engineer  ",
+	}
+	if commands.createInput != wantInput {
+		t.Fatalf(
+			"CreatePerson() input = %+v, want %+v",
+			commands.createInput,
+			wantInput,
+		)
+	}
+
+	for _, tt := range []struct {
+		err     error
+		message string
+	}{
+		{
+			err:     contacts.ErrPersonNameRequired,
+			message: "Name is required",
+		},
+		{
+			err:     contacts.ErrPersonNameExists,
+			message: "A person with this name already exists",
+		},
+	} {
+		commands.createErr = tt.err
+
+		response = postForm(
+			server.httpServer.Handler,
+			"/persons",
+			values,
+		)
+
+		if response.Code != http.StatusUnprocessableEntity {
+			t.Fatalf(
+				"POST /persons status = %d, want %d",
+				response.Code,
+				http.StatusUnprocessableEntity,
+			)
+		}
+
+		body := response.Body.String()
+		if !strings.Contains(body, tt.message) {
+			t.Fatalf("POST /persons body does not contain %q", tt.message)
+		}
+		if !strings.Contains(body, `value="  Anna Petrova  "`) {
+			t.Fatal("POST /persons body does not preserve name")
+		}
+	}
+
+	commands.createErr = nil
+	callsBefore := commands.createCalls
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/persons",
+		strings.NewReader(values.Encode()),
+	)
+	request.Header.Set(
+		"Content-Type",
+		"application/x-www-form-urlencoded",
+	)
+	request.Header.Set("Origin", "https://example.net")
+
+	response = httptest.NewRecorder()
+	server.httpServer.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf(
+			"cross-origin POST status = %d, want %d",
+			response.Code,
+			http.StatusForbidden,
+		)
+	}
+	if commands.createCalls != callsBefore {
+		t.Fatal("cross-origin POST reached CreatePerson")
+	}
+}
+
+func postForm(
+	handler http.Handler,
+	path string,
+	values url.Values,
+) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(
+		http.MethodPost,
+		path,
+		strings.NewReader(values.Encode()),
+	)
+	request.Header.Set(
+		"Content-Type",
+		"application/x-www-form-urlencoded",
+	)
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func TestUpdatePerson(t *testing.T) {
+	commands := &recordingPersonCommands{}
+
+	server, err := NewServer(
+		0,
+		&recordingPersonQueries{},
+		commands,
+	)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	values := url.Values{
+		"name":     {"  Anna Petrova  "},
+		"position": {"  Director  "},
+	}
+
+	response := postForm(
+		server.httpServer.Handler,
+		"/persons/101",
+		values,
+	)
+
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf(
+			"POST /persons/101 status = %d, want %d",
+			response.Code,
+			http.StatusSeeOther,
+		)
+	}
+	if location := response.Header().Get("Location"); location != "/persons/101?saved=1" {
+		t.Fatalf("POST /persons/101 Location = %q", location)
+	}
+
+	if commands.updateID != common.ID(101) {
+		t.Fatalf("UpdatePerson() id = %d, want 101", commands.updateID)
+	}
+
+	wantInput := contacts.PersonInput{
+		Name:     "  Anna Petrova  ",
+		Position: "  Director  ",
+	}
+	if commands.updateInput != wantInput {
+		t.Fatalf(
+			"UpdatePerson() input = %+v, want %+v",
+			commands.updateInput,
+			wantInput,
+		)
+	}
+
+	commands.updateErr = contacts.ErrPersonNameExists
+
+	response = postForm(
+		server.httpServer.Handler,
+		"/persons/101",
+		values,
+	)
+
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf(
+			"duplicate update status = %d, want %d",
+			response.Code,
+			http.StatusUnprocessableEntity,
+		)
+	}
+
+	body := response.Body.String()
+	for _, want := range []string{
+		"A person with this name already exists",
+		`action="/persons/101"`,
+		`value="  Anna Petrova  "`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("duplicate update body does not contain %q", want)
+		}
+	}
+
+	commands.updateErr = contacts.ErrPersonNotFound
+
+	response = postForm(
+		server.httpServer.Handler,
+		"/persons/101",
+		values,
+	)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf(
+			"missing update status = %d, want %d",
+			response.Code,
+			http.StatusNotFound,
+		)
 	}
 }

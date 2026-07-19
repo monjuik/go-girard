@@ -27,6 +27,43 @@
                 top: var(--pico-spacing);
             }
 
+            .page-header {
+                display: flex;
+                align-items: start;
+                justify-content: space-between;
+                gap: var(--pico-spacing);
+                flex-wrap: wrap;
+            }
+
+            .actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                align-items: center;
+            }
+
+            .actions > * {
+                margin: 0;
+            }
+
+            .actions > button[type="submit"] {
+                width: auto;
+            }
+
+
+            .pagination {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.5rem;
+            }
+
+            .pagination > * {
+                width: auto;
+                margin: 0;
+                white-space: nowrap;
+            }
+
             @media (max-width: 768px) {
                 .app-shell {
                     grid-template-columns: 1fr;

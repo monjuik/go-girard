@@ -1,10 +1,12 @@
 {{define "persons"}} {{template "layout_start" .}}
 
-<header>
+<header class="page-header">
     <hgroup>
         <h1>Persons</h1>
         <p>Contacts for outreach and follow-up.</p>
     </hgroup>
+
+    <a href="/persons/new" role="button">New person…</a>
 </header>
 
 <section>
@@ -44,23 +46,35 @@
             </tbody>
         </table>
     </figure>
-    <div role="group" aria-label="Persons pagination">
+    <nav class="pagination" aria-label="Persons pagination">
         {{if .Data.PreviousURL}}
-        <a href="{{.Data.PreviousURL}}" role="button" class="secondary">
-            Previous
+        <a
+            href="{{.Data.PreviousURL}}"
+            role="button"
+            class="secondary outline"
+        >
+            &larr; Previous
         </a>
         {{else}}
-        <button type="button" class="secondary" disabled>Previous</button>
+        <button type="button" class="secondary outline" disabled>
+            &larr; Previous
+        </button>
         {{end}}
 
         {{if .Data.NextURL}}
-        <a href="{{.Data.NextURL}}" role="button" class="secondary">
-            Next
+        <a
+            href="{{.Data.NextURL}}"
+            role="button"
+            class="secondary outline"
+        >
+            Next &rarr;
         </a>
         {{else}}
-        <button type="button" class="secondary" disabled>Next</button>
+        <button type="button" class="secondary outline" disabled>
+            Next &rarr;
+        </button>
         {{end}}
-    </div>
+    </nav>
 </section>
 
 {{template "layout_end" .}} {{end}}

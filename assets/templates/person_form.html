@@ -1,0 +1,42 @@
+{{define "person_form"}} {{template "layout_start" .}}
+
+<header>
+      <hgroup>
+          <h1>{{.Data.Heading}}</h1>
+      </hgroup>
+  </header>
+
+  <form method="post" action="{{.Data.Action}}">
+      <label>
+          Name
+          <input
+              type="text"
+              name="name"
+              value="{{.Data.Input.Name}}"
+              required
+              autofocus
+              {{if .Data.NameError}}aria-invalid="true"{{end}}
+          />
+          {{if .Data.NameError}}
+          <small>{{.Data.NameError}}</small>
+          {{end}}
+      </label>
+
+      <label>
+          Position
+          <input
+              type="text"
+              name="position"
+              value="{{.Data.Input.Position}}"
+          />
+      </label>
+
+      <footer class="actions">
+          <button type="submit">{{.Data.SubmitLabel}}</button>
+          <a href="/persons" role="button" class="secondary outline">
+              Cancel
+          </a>
+      </footer>
+  </form>
+
+  {{template "layout_end" .}} {{end}}

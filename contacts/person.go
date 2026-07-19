@@ -7,16 +7,33 @@ import (
 	"github.com/monjuik/go-girard/common"
 )
 
+var (
+	ErrPersonIDInvalid    = errors.New("person id is invalid")
+	ErrPersonNameRequired = errors.New("person name is required")
+)
+
+// Person represents a person domain entity.
 type Person struct {
 	id       common.ID
 	name     string
 	position string
 	company  *Company
-	email    string
-	phone    string
-	note     string
 }
 
+// PersonInput contains editable fields to add or update person data.
+type PersonInput struct {
+	Name     string
+	Position string
+}
+
+// PersonsFilter controls searching and paging in the persons list.
+type PersonsFilter struct {
+	Query string
+	Skip  int
+	Limit int
+}
+
+// PersonRowView contains person data displayed in the table.
 type PersonRowView struct {
 	ID       string
 	Name     string
@@ -24,30 +41,44 @@ type PersonRowView struct {
 	Company  string
 }
 
-func NewPerson(id common.ID,
+// PersonView contains data to show on an individual page.
+type PersonView struct {
+	ID       string
+	Name     string
+	Position string
+}
+
+func NewPerson(
+	id common.ID,
 	name string,
 	position string,
 	company *Company,
-	email string,
-	phone string,
-	note string) (Person, error) {
-	if id.IsZero() {
-		return Person{}, errors.New("id cannot be 0")
+) (Person, error) {
+	if !id.IsValid() {
+		return Person{}, ErrPersonIDInvalid
 	}
 
-	if strings.TrimSpace(name) == "" {
-		return Person{}, errors.New("name cannot be empty")
+	person := Person{
+		id:      id,
+		company: company,
 	}
 
-	return Person{
-		id:       id,
-		name:     name,
-		position: position,
-		company:  company,
-		email:    email,
-		phone:    phone,
-		note:     note,
-	}, nil
+	if err := person.Update(name, position); err != nil {
+		return Person{}, err
+	}
+
+	return person, nil
+}
+
+func (p *Person) Update(name string, position string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ErrPersonNameRequired
+	}
+
+	p.name = name
+	p.position = strings.TrimSpace(position)
+	return nil
 }
 
 func (p Person) ID() common.ID {
@@ -64,18 +95,6 @@ func (p Person) Position() string {
 
 func (p Person) Company() *Company {
 	return p.company
-}
-
-func (p Person) Email() string {
-	return p.email
-}
-
-func (p Person) Phone() string {
-	return p.phone
-}
-
-func (p Person) Note() string {
-	return p.note
 }
 
 type Company struct {

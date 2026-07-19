@@ -23,6 +23,16 @@ func TestIDFromString(t *testing.T) {
 			value:   "",
 			wantErr: true,
 		},
+		{
+			name:    "zero id",
+			value:   "0",
+			wantErr: true,
+		},
+		{
+			name:    "negative id",
+			value:   "-1",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -40,8 +50,8 @@ func TestIDFromString(t *testing.T) {
 				t.Fatalf("IDFromString() error = %v", err)
 			}
 
-			if id.IsZero() {
-				t.Fatal("IDFromString() returned zero ID")
+			if !id.IsValid() {
+				t.Fatalf("IDFromString() returned invalid ID %d", id)
 			}
 
 			if id.String() != tt.value {

@@ -87,7 +87,6 @@ go-girard/
 │       └── main.go
 │
 ├── app/
-│   ├── app.go
 │   ├── server.go
 │   ├── routes.go
 │   ├── config.go

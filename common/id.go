@@ -1,6 +1,12 @@
 package common
 
-import "github.com/bwmarrin/snowflake"
+import (
+	"errors"
+
+	"github.com/bwmarrin/snowflake"
+)
+
+var ErrInvalidID = errors.New("id must be positive")
 
 // The application uses a single node because it is a single-tenant, single-process self-hosted app
 var defaultNode = mustNewSnowflakeNode(1)
@@ -15,6 +21,10 @@ func (id ID) IsZero() bool {
 	return id == 0
 }
 
+func (id ID) IsValid() bool {
+	return id > 0
+}
+
 func (id ID) Int64() int64 {
 	return int64(id)
 }
@@ -24,18 +34,25 @@ func (id ID) String() string {
 }
 
 func MustIDFromString(value string) ID {
-	id, err := snowflake.ParseString(value)
+	id, err := IDFromString(value)
 	if err != nil {
 		panic(err)
 	}
-	return ID(id.Int64())
+	return id
 }
+
 func IDFromString(value string) (ID, error) {
-	id, err := snowflake.ParseString(value)
+	parsed, err := snowflake.ParseString(value)
 	if err != nil {
 		return 0, err
 	}
-	return ID(id.Int64()), nil
+
+	id := ID(parsed.Int64())
+	if !id.IsValid() {
+		return 0, ErrInvalidID
+	}
+
+	return id, nil
 }
 
 func mustNewSnowflakeNode(nodeId int64) *snowflake.Node {
