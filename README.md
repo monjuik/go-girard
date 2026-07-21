@@ -14,3 +14,24 @@ I couldn't find a proper tool to manage sales-outreach activities. So I am build
 ## What's in this name?
 
 Joe Girard was an American salesman recognised by the Guinness Book of World Records as the seller of the most cars in a year (1,425 in 1973). This app is written in Go.
+
+## Development
+
+Run all tests:
+
+  ```bash
+  go test ./...
+  ```
+
+  ### Fuzz testing
+
+  The project includes fuzz tests for ID parsing, person domain invariants,
+  and HTTP form handling.
+
+  Run a specific fuzz target for a limited time:
+
+  ```bash
+  go test ./common -fuzz=FuzzIDFromString -fuzztime=10s
+  go test ./contacts -fuzz=FuzzPersonUpdate -fuzztime=10s
+  go test ./app -fuzz=FuzzPersonFormEndpoints -fuzztime=10s
+  ```

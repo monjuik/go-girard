@@ -2,6 +2,7 @@ package contacts
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/monjuik/go-girard/common"
@@ -175,4 +176,83 @@ func TestPersonUpdate(t *testing.T) {
 	if person.Name() != "Jane Doe" || person.Position() != "Director" {
 		t.Fatal("failed Update() changed person")
 	}
+}
+
+func FuzzPersonUpdate(f *testing.F) {
+	for _, seed := range []struct {
+		name     string
+		position string
+	}{
+		{"Jane Doe", "Director"},
+		{"  Jane Doe  ", "  Director  "},
+		{"", "Director"},
+		{" \t\n", "Director"},
+		{"  Мария 李  ", "  Инженер  "},
+		{"\u00a0", "Director"},
+		{"<script>alert(1)</script>", "%_&=+"},
+	} {
+		f.Add(seed.name, seed.position)
+	}
+
+	f.Fuzz(func(t *testing.T, name, position string) {
+		company, err := NewCompany(common.ID(1), "Acme ltd.")
+		if err != nil {
+			t.Fatalf("NewCompany() error = %v", err)
+		}
+
+		person, err := NewPerson(
+			common.ID(2),
+			"Original Name",
+			"Original Position",
+			&company,
+		)
+		if err != nil {
+			t.Fatalf("NewPerson() error = %v", err)
+		}
+
+		err = person.Update(name, position)
+
+		wantName := strings.TrimSpace(name)
+		if wantName == "" {
+			if !errors.Is(err, ErrPersonNameRequired) {
+				t.Fatalf(
+					"Update(%q, %q) error = %v, want ErrPersonNameRequired",
+					name,
+					position,
+					err,
+				)
+			}
+
+			if person.Name() != "Original Name" ||
+				person.Position() != "Original Position" {
+				t.Fatal("failed Update() changed person")
+			}
+
+			return
+		}
+
+		if err != nil {
+			t.Fatalf("Update(%q, %q) error = %v", name, position, err)
+		}
+
+		if person.Name() != wantName {
+			t.Fatalf("person.Name() = %q, want %q", person.Name(), wantName)
+		}
+
+		wantPosition := strings.TrimSpace(position)
+		if person.Position() != wantPosition {
+			t.Fatalf(
+				"person.Position() = %q, want %q",
+				person.Position(),
+				wantPosition,
+			)
+		}
+
+		if person.ID() != common.ID(2) {
+			t.Fatalf("Update() changed person ID to %d", person.ID())
+		}
+		if person.Company() != &company {
+			t.Fatal("Update() changed company")
+		}
+	})
 }

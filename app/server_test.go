@@ -683,3 +683,131 @@ func TestUpdatePerson(t *testing.T) {
 		)
 	}
 }
+
+func FuzzPersonFormEndpoints(f *testing.F) {
+	for _, seed := range []struct {
+		endpoint uint8
+		name     string
+		position string
+	}{
+		{0, "Anna Petrova", "Engineer"},
+		{1, "  Мария 李  ", "  Director  "},
+		{0, "", ""},
+		{1, "<script>alert(1)</script>", "%_&=+"},
+		{
+			0,
+			strings.Repeat("a", maxPersonFormBodySize),
+			"",
+		},
+	} {
+		f.Add(seed.endpoint, seed.name, seed.position)
+	}
+
+	commands := &recordingPersonCommands{
+		createID: common.ID(101),
+	}
+	server, err := NewServer(
+		0,
+		&recordingPersonQueries{},
+		commands,
+	)
+	if err != nil {
+		f.Fatalf("NewServer() error = %v", err)
+	}
+
+	f.Fuzz(func(t *testing.T, endpoint uint8, name, position string) {
+		values := url.Values{
+			"name":     {name},
+			"position": {position},
+		}
+		encoded := values.Encode()
+
+		path := "/persons"
+		update := endpoint%2 == 1
+		if update {
+			path = "/persons/101"
+		}
+
+		createCallsBefore := commands.createCalls
+		updateCallsBefore := commands.updateCalls
+
+		request := httptest.NewRequest(
+			http.MethodPost,
+			path,
+			strings.NewReader(encoded),
+		)
+		request.Header.Set(
+			"Content-Type",
+			"application/x-www-form-urlencoded",
+		)
+
+		response := httptest.NewRecorder()
+		server.httpServer.Handler.ServeHTTP(response, request)
+
+		if len(encoded) > maxPersonFormBodySize {
+			if response.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf(
+					"POST %s with %d-byte body status = %d, want %d",
+					path,
+					len(encoded),
+					response.Code,
+					http.StatusRequestEntityTooLarge,
+				)
+			}
+
+			if commands.createCalls != createCallsBefore ||
+				commands.updateCalls != updateCallsBefore {
+				t.Fatal("oversized request reached person command")
+			}
+			return
+		}
+
+		if response.Code != http.StatusSeeOther {
+			t.Fatalf(
+				"POST %s status = %d, want %d",
+				path,
+				response.Code,
+				http.StatusSeeOther,
+			)
+		}
+
+		wantInput := contacts.PersonInput{
+			Name:     name,
+			Position: position,
+		}
+
+		if update {
+			if commands.updateCalls != updateCallsBefore+1 {
+				t.Fatal("request did not reach UpdatePerson exactly once")
+			}
+			if commands.createCalls != createCallsBefore {
+				t.Fatal("update request reached CreatePerson")
+			}
+			if commands.updateID != common.ID(101) {
+				t.Fatalf("UpdatePerson() ID = %d, want 101", commands.updateID)
+			}
+			if commands.updateInput != wantInput {
+				t.Fatalf(
+					"UpdatePerson() input = %+v, want %+v",
+					commands.updateInput,
+					wantInput,
+				)
+			}
+			return
+		}
+
+		if commands.createCalls != createCallsBefore+1 {
+			t.Fatal("request did not reach CreatePerson exactly once")
+		}
+		if commands.updateCalls != updateCallsBefore {
+			t.Fatal("create request reached UpdatePerson")
+		}
+		if commands.createInput != wantInput {
+			t.Fatalf(
+				"CreatePerson() input = %+v, want %+v",
+				commands.createInput,
+				wantInput,
+			)
+		}
+	})
+}

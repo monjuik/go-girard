@@ -60,3 +60,56 @@ func TestIDFromString(t *testing.T) {
 		})
 	}
 }
+
+func FuzzIDFromString(f *testing.F) {
+	for _, seed := range []string{
+		"1992328621821009920",
+		"1",
+		"+1",
+		"0001",
+		"0",
+		"-1",
+		"",
+		"not-a-snowflake-id",
+		"9223372036854775807",
+		"9223372036854775808",
+	} {
+		f.Add(seed)
+	}
+
+	f.Fuzz(func(t *testing.T, value string) {
+		id, err := IDFromString(value)
+		if err != nil {
+			return
+		}
+
+		if !id.IsValid() {
+			t.Fatalf(
+				"IDFromString(%q) returned invalid ID %d without error",
+				value,
+				id,
+			)
+		}
+
+		canonical := id.String()
+		reparsed, err := IDFromString(canonical)
+		if err != nil {
+			t.Fatalf(
+				"IDFromString(%q) succeeded, but canonical form %q failed: %v",
+				value,
+				canonical,
+				err,
+			)
+		}
+
+		if reparsed != id {
+			t.Fatalf(
+				"round-trip ID = %d, want %d; input = %q, canonical = %q",
+				reparsed,
+				id,
+				value,
+				canonical,
+			)
+		}
+	})
+}
