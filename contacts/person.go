@@ -96,31 +96,3 @@ func (p Person) Position() string {
 func (p Person) Company() *Company {
 	return p.company
 }
-
-type Company struct {
-	id   common.ID
-	name string
-}
-
-func NewCompany(id common.ID, name string) (Company, error) {
-	if id.IsZero() {
-		return Company{}, errors.New("id cannot be 0")
-	}
-
-	if strings.TrimSpace(name) == "" {
-		return Company{}, errors.New("name cannot be empty")
-	}
-
-	return Company{
-		id:   id,
-		name: name,
-	}, nil
-}
-
-func (c Company) ID() common.ID {
-	return c.id
-}
-
-func (c Company) Name() string {
-	return c.name
-}

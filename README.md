@@ -15,6 +15,10 @@ I couldn't find a proper tool to manage sales-outreach activities. So I am build
 
 Joe Girard was an American salesman recognised by the Guinness Book of World Records as the seller of the most cars in a year (1,425 in 1973). This app is written in Go.
 
+## What does this app do?
+
+- Stores data about persons you are in touch. Name of a person should be unique. This is made on purpose. Better rename second John Smith in your app than confuse him by sending second welcome-message.
+
 ## Development
 
 Run all tests:

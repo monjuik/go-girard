@@ -1,0 +1,71 @@
+{{define "companies"}} {{template "layout_start" .}}
+
+  <header class="page-header">
+      <hgroup>
+          <h1>Companies</h1>
+          <p>Companies connected with your contacts.</p>
+      </hgroup>
+
+      <a href="/companies/new" role="button">New company…</a>
+  </header>
+
+  <section>
+      <form method="get" action="/companies">
+          <fieldset role="group">
+              <input
+                  type="search"
+                  name="q"
+                  value="{{.Data.Query}}"
+                  placeholder="Search by name"
+              />
+              <button type="submit">Search</button>
+          </fieldset>
+      </form>
+
+      <figure>
+          <table class="striped">
+              <thead>
+                  <tr>
+                      <th>Name</th>
+                      <th>Country</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {{range .Data.Companies}}
+                  <tr>
+                      <td><a href="/companies/{{.ID}}">{{.Name}}</a></td>
+                      <td>{{if .Country}}{{.Country}}{{else}}&mdash;{{end}}</td>
+                  </tr>
+                  {{else}}
+                  <tr>
+                      <td colspan="2">No companies found.</td>
+                  </tr>
+                  {{end}}
+              </tbody>
+          </table>
+      </figure>
+
+      <nav class="pagination" aria-label="Companies pagination">
+          {{if .Data.PreviousURL}}
+          <a href="{{.Data.PreviousURL}}" role="button" class="secondary outline">
+              &larr; Previous
+          </a>
+          {{else}}
+          <button type="button" class="secondary outline" disabled>
+              &larr; Previous
+          </button>
+          {{end}}
+
+          {{if .Data.NextURL}}
+          <a href="{{.Data.NextURL}}" role="button" class="secondary outline">
+              Next &rarr;
+          </a>
+          {{else}}
+          <button type="button" class="secondary outline" disabled>
+              Next &rarr;
+          </button>
+          {{end}}
+      </nav>
+  </section>
+
+  {{template "layout_end" .}} {{end}}

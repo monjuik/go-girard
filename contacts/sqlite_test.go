@@ -301,3 +301,268 @@ func assertPersonInput(
 		t.Fatalf("person = %+v, want %+v", got, want)
 	}
 }
+
+func TestSQLiteCompanyQueries(t *testing.T) {
+	db := openTestDatabase(t)
+
+	if _, err := db.Exec(`
+		INSERT INTO company (id, name, country, deleted) VALUES
+			(1, 'Northwind Logistics', 'Cyprus', 0),
+			(2, 'Acme_100%', 'Denmark', 0),
+			(3, 'Deleted Company', 'France', 1);
+	`); err != nil {
+		t.Fatalf("insert company fixtures: %v", err)
+	}
+
+	queries := contacts.NewSQLiteCompanyQueries(db)
+
+	tests := []struct {
+		name      string
+		filter    contacts.CompaniesFilter
+		wantNames []string
+	}{
+		{
+			name:      "all companies",
+			filter:    contacts.CompaniesFilter{Limit: 20},
+			wantNames: []string{"Acme_100%", "Northwind Logistics"},
+		},
+		{
+			name:      "name ignoring case",
+			filter:    contacts.CompaniesFilter{Query: "NORTHWIND", Limit: 20},
+			wantNames: []string{"Northwind Logistics"},
+		},
+		{
+			name:      "literal percent",
+			filter:    contacts.CompaniesFilter{Query: "%", Limit: 20},
+			wantNames: []string{"Acme_100%"},
+		},
+		{
+			name:      "literal underscore",
+			filter:    contacts.CompaniesFilter{Query: "_", Limit: 20},
+			wantNames: []string{"Acme_100%"},
+		},
+		{
+			name:   "no match",
+			filter: contacts.CompaniesFilter{Query: "missing", Limit: 20},
+		},
+		{
+			name:      "paging",
+			filter:    contacts.CompaniesFilter{Skip: 1, Limit: 1},
+			wantNames: []string{"Northwind Logistics"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows, err := queries.ListCompanyRows(
+				context.Background(),
+				tt.filter,
+			)
+			if err != nil {
+				t.Fatalf("ListCompanyRows() error = %v", err)
+			}
+
+			gotNames := make([]string, len(rows))
+			for i, row := range rows {
+				gotNames[i] = row.Name
+			}
+
+			if !slices.Equal(gotNames, tt.wantNames) {
+				t.Fatalf(
+					"ListCompanyRows() names = %v, want %v",
+					gotNames,
+					tt.wantNames,
+				)
+			}
+		})
+	}
+
+	company, err := queries.GetCompany(
+		context.Background(),
+		common.ID(1),
+	)
+	if err != nil {
+		t.Fatalf("GetCompany() error = %v", err)
+	}
+
+	wantCompany := contacts.CompanyView{
+		ID:      common.ID(1).String(),
+		Name:    "Northwind Logistics",
+		Country: "Cyprus",
+	}
+	if company != wantCompany {
+		t.Fatalf(
+			"GetCompany() = %+v, want %+v",
+			company,
+			wantCompany,
+		)
+	}
+
+	for _, id := range []common.ID{3, 999} {
+		_, err := queries.GetCompany(context.Background(), id)
+		if !errors.Is(err, contacts.ErrCompanyNotFound) {
+			t.Fatalf(
+				"GetCompany(%d) error = %v, want ErrCompanyNotFound",
+				id,
+				err,
+			)
+		}
+	}
+}
+
+func TestCompanyServiceWithSQLite(t *testing.T) {
+	db := openTestDatabase(t)
+	repository := contacts.NewSQLiteCompanyRepository(db)
+	commands := contacts.NewCompanyService(repository)
+	ctx := context.Background()
+
+	northwindID, err := commands.CreateCompany(ctx, contacts.CompanyInput{
+		Name:    "  Northwind Logistics  ",
+		Country: "  Cyprus  ",
+	})
+	if err != nil {
+		t.Fatalf("CreateCompany() error = %v", err)
+	}
+
+	assertCompanyInput(
+		t,
+		db,
+		northwindID,
+		contacts.CompanyInput{
+			Name:    "Northwind Logistics",
+			Country: "Cyprus",
+		},
+	)
+
+	_, err = commands.CreateCompany(ctx, contacts.CompanyInput{
+		Name: "northwind logistics",
+	})
+	if !errors.Is(err, contacts.ErrCompanyNameExists) {
+		t.Fatalf(
+			"duplicate CreateCompany() error = %v, want ErrCompanyNameExists",
+			err,
+		)
+	}
+
+	acmeID, err := commands.CreateCompany(ctx, contacts.CompanyInput{
+		Name:    "Acme",
+		Country: "Denmark",
+	})
+	if err != nil {
+		t.Fatalf("CreateCompany(Acme) error = %v", err)
+	}
+
+	err = commands.UpdateCompany(ctx, acmeID, contacts.CompanyInput{
+		Name: "NORTHWIND LOGISTICS",
+	})
+	if !errors.Is(err, contacts.ErrCompanyNameExists) {
+		t.Fatalf(
+			"duplicate UpdateCompany() error = %v, want ErrCompanyNameExists",
+			err,
+		)
+	}
+
+	err = commands.UpdateCompany(ctx, northwindID, contacts.CompanyInput{
+		Name:    "  Northwind Group  ",
+		Country: "  France  ",
+	})
+	if err != nil {
+		t.Fatalf("UpdateCompany() error = %v", err)
+	}
+
+	assertCompanyInput(
+		t,
+		db,
+		northwindID,
+		contacts.CompanyInput{
+			Name:    "Northwind Group",
+			Country: "France",
+		},
+	)
+
+	if _, err := db.Exec(
+		`
+			INSERT INTO person (id, name, position, company)
+			VALUES (101, 'Anna Petrova', 'Engineer', ?)
+		`,
+		northwindID.Int64(),
+	); err != nil {
+		t.Fatalf("insert linked person: %v", err)
+	}
+
+	if err := commands.DeleteCompany(ctx, northwindID); err != nil {
+		t.Fatalf("DeleteCompany() error = %v", err)
+	}
+
+	queries := contacts.NewSQLiteCompanyQueries(db)
+	if _, err := queries.GetCompany(ctx, northwindID); !errors.Is(
+		err,
+		contacts.ErrCompanyNotFound,
+	) {
+		t.Fatalf(
+			"GetCompany() after delete error = %v, want ErrCompanyNotFound",
+			err,
+		)
+	}
+
+	personRows, err := contacts.NewSQLitePersonQueries(db).ListPersonRows(
+		ctx,
+		contacts.PersonsFilter{Limit: 20},
+	)
+	if err != nil {
+		t.Fatalf("ListPersonRows() error = %v", err)
+	}
+	if len(personRows) != 1 || personRows[0].Company != "Northwind Group" {
+		t.Fatalf(
+			"person rows after company delete = %+v, want linked company",
+			personRows,
+		)
+	}
+
+	err = commands.UpdateCompany(ctx, northwindID, contacts.CompanyInput{
+		Name: "Updated deleted company",
+	})
+	if !errors.Is(err, contacts.ErrCompanyNotFound) {
+		t.Fatalf(
+			"UpdateCompany() after delete error = %v, want ErrCompanyNotFound",
+			err,
+		)
+	}
+
+	err = commands.DeleteCompany(ctx, northwindID)
+	if !errors.Is(err, contacts.ErrCompanyNotFound) {
+		t.Fatalf(
+			"second DeleteCompany() error = %v, want ErrCompanyNotFound",
+			err,
+		)
+	}
+
+	_, err = commands.CreateCompany(ctx, contacts.CompanyInput{
+		Name: "northwind group",
+	})
+	if err != nil {
+		t.Fatalf("reuse deleted company name: %v", err)
+	}
+}
+
+func assertCompanyInput(
+	t *testing.T,
+	db *sql.DB,
+	id common.ID,
+	want contacts.CompanyInput,
+) {
+	t.Helper()
+
+	var got contacts.CompanyInput
+	err := db.QueryRow(
+		"SELECT name, country FROM company WHERE id = ?",
+		id.Int64(),
+	).Scan(&got.Name, &got.Country)
+	if err != nil {
+		t.Fatalf("query company: %v", err)
+	}
+
+	if got != want {
+		t.Fatalf("company = %+v, want %+v", got, want)
+	}
+}

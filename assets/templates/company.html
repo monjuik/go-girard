@@ -1,0 +1,39 @@
+{{define "company"}} {{template "layout_start" .}}
+
+  <header>
+      <hgroup>
+          <h1>{{.Data.Company.Name}}</h1>
+      </hgroup>
+  </header>
+
+  {{if .Data.Saved}}
+  <article role="status">Company saved.</article>
+  {{end}}
+
+  <dl>
+      <dt>Country</dt>
+      <dd>
+          {{if .Data.Company.Country}}
+              {{.Data.Company.Country}}
+          {{else}}
+              &mdash;
+          {{end}}
+      </dd>
+  </dl>
+
+  <footer class="actions">
+      <a href="/companies/{{.Data.Company.ID}}/edit" role="button">
+          Edit
+      </a>
+      <form
+          method="post"
+          action="/companies/{{.Data.Company.ID}}/delete"
+          onsubmit="return confirm('Delete this company?')"
+      >
+          <button type="submit" class="danger outline">
+              Delete
+          </button>
+      </form>
+  </footer>
+
+  {{template "layout_end" .}} {{end}}

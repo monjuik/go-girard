@@ -19,12 +19,28 @@ type SQLitePersonRepository struct {
 	db *sql.DB
 }
 
+type SQLiteCompanyQueries struct {
+	db *sql.DB
+}
+
+type SQLiteCompanyRepository struct {
+	db *sql.DB
+}
+
 func NewSQLitePersonQueries(db *sql.DB) *SQLitePersonQueries {
 	return &SQLitePersonQueries{db: db}
 }
 
 func NewSQLitePersonRepository(db *sql.DB) *SQLitePersonRepository {
 	return &SQLitePersonRepository{db: db}
+}
+
+func NewSQLiteCompanyQueries(db *sql.DB) *SQLiteCompanyQueries {
+	return &SQLiteCompanyQueries{db: db}
+}
+
+func NewSQLiteCompanyRepository(db *sql.DB) *SQLiteCompanyRepository {
+	return &SQLiteCompanyRepository{db: db}
 }
 
 func (q *SQLitePersonQueries) ListPersonRows(
@@ -172,6 +188,173 @@ func (r *SQLitePersonRepository) Save(
 	}
 	if affected == 0 {
 		return ErrPersonNotFound
+	}
+
+	return nil
+}
+
+func (q *SQLiteCompanyQueries) ListCompanyRows(
+	ctx context.Context,
+	filter CompaniesFilter,
+) ([]CompanyRowView, error) {
+	if filter.Skip < 0 {
+		return nil, errors.New("skip cannot be negative")
+	}
+	if filter.Limit <= 0 {
+		return nil, errors.New("limit must be positive")
+	}
+
+	search := strings.TrimSpace(filter.Query)
+	pattern := "%" + escapeLike(search) + "%"
+
+	rows, err := q.db.QueryContext(
+		ctx,
+		`
+			SELECT id, name, country
+			FROM company
+			WHERE deleted = 0
+			AND (
+					? = ''
+					OR name COLLATE NOCASE LIKE ? ESCAPE '\'
+			)
+			ORDER BY name COLLATE NOCASE, id
+			LIMIT ? OFFSET ?
+		`,
+		search,
+		pattern,
+		filter.Limit,
+		filter.Skip,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query company rows: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]CompanyRowView, 0, filter.Limit)
+	for rows.Next() {
+		var id int64
+		var name, country string
+
+		if err := rows.Scan(&id, &name, &country); err != nil {
+			return nil, fmt.Errorf("scan company row: %w", err)
+		}
+
+		result = append(result, CompanyRowView{
+			ID:      common.ID(id).String(),
+			Name:    name,
+			Country: country,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate company rows: %w", err)
+	}
+
+	return result, nil
+}
+
+func (q *SQLiteCompanyQueries) GetCompany(
+	ctx context.Context,
+	id common.ID,
+) (CompanyView, error) {
+	view := CompanyView{ID: id.String()}
+	err := q.db.QueryRowContext(
+		ctx,
+		`
+			SELECT name, country
+			FROM company
+			WHERE id = ? AND deleted = 0
+		`,
+		id.Int64(),
+	).Scan(&view.Name, &view.Country)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return CompanyView{}, ErrCompanyNotFound
+	}
+	if err != nil {
+		return CompanyView{}, fmt.Errorf("query company: %w", err)
+	}
+
+	return view, nil
+}
+
+func (r *SQLiteCompanyRepository) Add(
+	ctx context.Context,
+	company Company,
+) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO company (id, name, country) VALUES (?, ?, ?)`,
+		company.ID().Int64(),
+		company.Name(),
+		company.Country(),
+	)
+	if err != nil {
+		if isUniqueConstraint(err) {
+			return ErrCompanyNameExists
+		}
+		return fmt.Errorf("insert company: %w", err)
+	}
+
+	return nil
+}
+
+func (r *SQLiteCompanyRepository) Save(
+	ctx context.Context,
+	company Company,
+) error {
+	result, err := r.db.ExecContext(
+		ctx,
+		`
+			UPDATE company
+			SET name = ?, country = ?
+			WHERE id = ? AND deleted = 0
+		`,
+		company.Name(),
+		company.Country(),
+		company.ID().Int64(),
+	)
+	if err != nil {
+		if isUniqueConstraint(err) {
+			return ErrCompanyNameExists
+		}
+		return fmt.Errorf("update company: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get updated company count: %w", err)
+	}
+	if affected == 0 {
+		return ErrCompanyNotFound
+	}
+
+	return nil
+}
+
+func (r *SQLiteCompanyRepository) Delete(
+	ctx context.Context,
+	id common.ID,
+) error {
+	result, err := r.db.ExecContext(
+		ctx,
+		`
+			UPDATE company
+			SET deleted = 1
+			WHERE id = ? AND deleted = 0
+		`,
+		id.Int64(),
+	)
+	if err != nil {
+		return fmt.Errorf("delete company: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get deleted company count: %w", err)
+	}
+	if affected == 0 {
+		return ErrCompanyNotFound
 	}
 
 	return nil

@@ -42,7 +42,17 @@ func run() error {
 	personRepository := contacts.NewSQLitePersonRepository(db)
 	personCommands := contacts.NewPersonService(personRepository)
 
-	server, err := app.NewServer(*port, personQueries, personCommands)
+	companyQueries := contacts.NewSQLiteCompanyQueries(db)
+	companyRepository := contacts.NewSQLiteCompanyRepository(db)
+	companyCommands := contacts.NewCompanyService(companyRepository)
+
+	server, err := app.NewServer(
+		*port,
+		personQueries,
+		personCommands,
+		companyQueries,
+		companyCommands,
+	)
 	if err != nil {
 		return fmt.Errorf("create server: %w", err)
 	}

@@ -131,7 +131,10 @@ var migrations = []migration{
 		sql: `
 			CREATE TABLE company (
 				id   INTEGER PRIMARY KEY,
-				name TEXT NOT NULL
+				name TEXT NOT NULL,
+				country TEXT NOT NULL DEFAULT '',
+				deleted  INTEGER NOT NULL DEFAULT 0
+						CHECK (deleted IN (0, 1))
 			);
 			CREATE TABLE person (
 				id       INTEGER PRIMARY KEY,
@@ -144,6 +147,10 @@ var migrations = []migration{
 
 			CREATE UNIQUE INDEX person_name
 			ON person (name COLLATE NOCASE)
+			WHERE deleted = 0;
+
+			CREATE UNIQUE INDEX company_name
+			ON company (name COLLATE NOCASE)
 			WHERE deleted = 0;
 		`,
 	},

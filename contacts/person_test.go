@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewPerson(t *testing.T) {
-	company, err := NewCompany(common.ID(1), "Acme ltd.")
+	company, err := NewCompany(common.ID(1), "Acme ltd.", "")
 	if err != nil {
 		t.Fatalf("NewCompany() error = %v", err)
 	}
@@ -84,61 +84,8 @@ func TestNewPerson(t *testing.T) {
 	}
 }
 
-func TestNewCompany(t *testing.T) {
-	tests := []struct {
-		name        string
-		id          common.ID
-		companyName string
-		wantErr     bool
-	}{
-		{
-			name:        "valid company",
-			id:          common.ID(1),
-			companyName: "Acme ltd.",
-			wantErr:     false,
-		},
-		{
-			name:        "zero id",
-			id:          0,
-			companyName: "Acme ltd.",
-			wantErr:     true,
-		},
-		{
-			name:        "blank name",
-			id:          common.ID(2),
-			companyName: "   ",
-			wantErr:     true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			company, err := NewCompany(tt.id, tt.companyName)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("NewCompany() error = nil, want error")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("NewCompany() error = %v", err)
-			}
-
-			if company.ID() != tt.id {
-				t.Fatalf("company.ID() = %v, want %v", company.ID(), tt.id)
-			}
-
-			if company.Name() != tt.companyName {
-				t.Fatalf("company.Name() = %q, want %q", company.Name(), tt.companyName)
-			}
-		})
-	}
-}
-
 func TestPersonUpdate(t *testing.T) {
-	company, err := NewCompany(common.ID(1), "Acme ltd.")
+	company, err := NewCompany(common.ID(1), "Acme ltd.", "")
 	if err != nil {
 		t.Fatalf("NewCompany() error = %v", err)
 	}
@@ -195,7 +142,7 @@ func FuzzPersonUpdate(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, name, position string) {
-		company, err := NewCompany(common.ID(1), "Acme ltd.")
+		company, err := NewCompany(common.ID(1), "Acme ltd.", "")
 		if err != nil {
 			t.Fatalf("NewCompany() error = %v", err)
 		}
