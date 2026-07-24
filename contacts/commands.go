@@ -19,6 +19,7 @@ var (
 type PersonCommands interface {
 	CreatePerson(ctx context.Context, input PersonInput) (common.ID, error)
 	UpdatePerson(ctx context.Context, id common.ID, input PersonInput) error
+	DeletePerson(ctx context.Context, id common.ID) error
 }
 
 // CompanyCommands provides operations to change company data.

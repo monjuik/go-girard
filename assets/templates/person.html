@@ -25,9 +25,15 @@
       <a href="/persons/{{.Data.Person.ID}}/edit" role="button">
           Edit
       </a>
-      <button type="button" class="secondary outline" disabled>
-          Delete
-      </button>
+      <form
+          method="post"
+          action="/persons/{{.Data.Person.ID}}/delete"
+          onsubmit="return confirm('Delete this person?')"
+      >
+          <button type="submit" class="danger outline">
+              Delete
+          </button>
+      </form>
   </footer>
 
   {{template "layout_end" .}} {{end}}

@@ -64,6 +64,16 @@ func (s *PersonService) UpdatePerson(
 	return nil
 }
 
+func (s *PersonService) DeletePerson(ctx context.Context, id common.ID) error {
+	if !id.IsValid() {
+		return ErrPersonIDInvalid
+	}
+	if err := s.persons.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete person: %w", err)
+	}
+	return nil
+}
+
 func NewCompanyService(companies CompanyRepository) *CompanyService {
 	return &CompanyService{companies: companies}
 }

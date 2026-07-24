@@ -32,6 +32,10 @@ type recordingPersonCommands struct {
 	updateInput contacts.PersonInput
 	updateErr   error
 	updateCalls int
+
+	deleteID    common.ID
+	deleteErr   error
+	deleteCalls int
 }
 
 type recordingCompanyQueries struct {
@@ -85,6 +89,15 @@ func (c *recordingPersonCommands) UpdatePerson(
 	c.updateID = id
 	c.updateInput = input
 	return c.updateErr
+}
+
+func (c *recordingPersonCommands) DeletePerson(
+	ctx context.Context,
+	id common.ID,
+) error {
+	c.deleteCalls++
+	c.deleteID = id
+	return c.deleteErr
 }
 
 func (q *recordingPersonQueries) ListPersonRows(
@@ -352,7 +365,7 @@ func TestPersonPages(t *testing.T) {
 		"Engineer",
 		`href="/persons/101/edit"`,
 		"Person saved.",
-		"Delete",
+		`action="/persons/101/delete"`,
 	)
 
 	response = fixture.get("/persons/101/edit")
@@ -560,6 +573,46 @@ func TestUpdatePerson(t *testing.T) {
 	fixture.personCommands.updateErr = contacts.ErrPersonNotFound
 	response = fixture.postForm("/persons/101", values)
 	assertStatus(t, response, http.StatusNotFound)
+}
+
+func TestDeletePerson(t *testing.T) {
+	fixture := newServerFixture(t)
+
+	response := fixture.postForm("/persons/101/delete", url.Values{})
+	assertStatus(t, response, http.StatusSeeOther)
+
+	if location := response.Header().Get("Location"); location != "/persons" {
+		t.Fatalf("delete Location = %q, want /persons", location)
+	}
+	if fixture.personCommands.deleteID != common.ID(101) {
+		t.Fatalf(
+			"DeletePerson() id = %d, want 101",
+			fixture.personCommands.deleteID,
+		)
+	}
+
+	fixture.personCommands.deleteErr = contacts.ErrPersonNotFound
+	response = fixture.postForm("/persons/101/delete", url.Values{})
+	assertStatus(t, response, http.StatusNotFound)
+
+	for _, id := range []string{"0", "-1", "invalid"} {
+		t.Run(id, func(t *testing.T) {
+			callsBefore := fixture.personCommands.deleteCalls
+
+			response := fixture.postForm(
+				"/persons/"+id+"/delete",
+				url.Values{},
+			)
+			assertStatus(t, response, http.StatusNotFound)
+
+			if fixture.personCommands.deleteCalls != callsBefore {
+				t.Fatalf(
+					"POST delete with id %s reached DeletePerson",
+					id,
+				)
+			}
+		})
+	}
 }
 
 func TestCompaniesPageSearchAndPaging(t *testing.T) {

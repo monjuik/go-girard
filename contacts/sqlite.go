@@ -193,6 +193,29 @@ func (r *SQLitePersonRepository) Save(
 	return nil
 }
 
+func (r *SQLitePersonRepository) Delete(ctx context.Context, id common.ID) error {
+	result, err := r.db.ExecContext(
+		ctx,
+		`
+			UPDATE person
+			SET deleted = 1
+			WHERE id = ? AND deleted = 0
+		`,
+		id.Int64(),
+	)
+	if err != nil {
+		return fmt.Errorf("delete person: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get deleted person count: %w", err)
+	}
+	if affected == 0 {
+		return ErrPersonNotFound
+	}
+	return nil
+}
+
 func (q *SQLiteCompanyQueries) ListCompanyRows(
 	ctx context.Context,
 	filter CompaniesFilter,

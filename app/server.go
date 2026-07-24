@@ -102,6 +102,7 @@ func NewServer(
 	mux.HandleFunc("POST /companies/{id}/delete", server.handleDeleteCompany)
 	mux.HandleFunc("POST /persons", server.handleCreatePerson)
 	mux.HandleFunc("POST /persons/{id}", server.handleUpdatePerson)
+	mux.HandleFunc("POST /persons/{id}/delete", server.handleDeletePerson)
 	addr := fmt.Sprintf(":%d", port)
 	protection := http.NewCrossOriginProtection()
 	server.httpServer = &http.Server{
@@ -277,6 +278,25 @@ func (s *Server) handleUpdatePerson(w http.ResponseWriter, r *http.Request) {
 		"/persons/"+id.String()+"?saved=1",
 		http.StatusSeeOther,
 	)
+}
+
+func (s *Server) handleDeletePerson(w http.ResponseWriter, r *http.Request) {
+	id, err := common.IDFromString(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	err = s.personCommands.DeletePerson(r.Context(), id)
+	if errors.Is(err, contacts.ErrPersonNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "failed to delete person", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/persons", http.StatusSeeOther)
 }
 
 func (s *Server) handleCompanies(w http.ResponseWriter, r *http.Request) {

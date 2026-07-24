@@ -9,6 +9,7 @@ import (
 type PersonRepository interface {
 	Add(ctx context.Context, person Person) error
 	Save(ctx context.Context, person Person) error
+	Delete(ctx context.Context, id common.ID) error
 }
 
 type CompanyRepository interface {

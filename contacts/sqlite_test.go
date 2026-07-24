@@ -201,11 +201,8 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 		t.Fatalf("person company = %+v, want 1", companyID)
 	}
 
-	if _, err := db.Exec(
-		"UPDATE person SET deleted = 1 WHERE id = ?",
-		annaID.Int64(),
-	); err != nil {
-		t.Fatalf("mark person deleted: %v", err)
+	if err := commands.DeletePerson(ctx, annaID); err != nil {
+		t.Fatalf("DeletePerson() error = %v", err)
 	}
 
 	err = commands.UpdatePerson(
@@ -215,6 +212,25 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 	)
 	if !errors.Is(err, contacts.ErrPersonNotFound) {
 		t.Fatalf("update deleted person error = %v, want ErrPersonNotFound", err)
+	}
+
+	queries := contacts.NewSQLitePersonQueries(db)
+	if _, err := queries.GetPerson(ctx, annaID); !errors.Is(
+		err,
+		contacts.ErrPersonNotFound,
+	) {
+		t.Fatalf(
+			"GetPerson() after delete error = %v, want ErrPersonNotFound",
+			err,
+		)
+	}
+
+	err = commands.DeletePerson(ctx, annaID)
+	if !errors.Is(err, contacts.ErrPersonNotFound) {
+		t.Fatalf(
+			"second DeletePerson() error = %v, want ErrPersonNotFound",
+			err,
+		)
 	}
 
 	_, err = commands.CreatePerson(
