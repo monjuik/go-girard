@@ -9,16 +9,11 @@ import (
 )
 
 func TestNewPerson(t *testing.T) {
-	company, err := NewCompany(common.ID(1), "Acme ltd.", "")
-	if err != nil {
-		t.Fatalf("NewCompany() error = %v", err)
-	}
-
 	person, err := NewPerson(
 		common.ID(2),
 		"  John Doe  ",
 		"  Head of Operations  ",
-		&company,
+		common.ID(1),
 	)
 	if err != nil {
 		t.Fatalf("NewPerson() error = %v", err)
@@ -37,21 +32,21 @@ func TestNewPerson(t *testing.T) {
 			"Head of Operations",
 		)
 	}
-	if person.Company() != &company {
-		t.Fatal("person.Company() does not contain the provided company")
+	if person.CompanyID() != common.ID(1) {
+		t.Fatalf("person.CompanyID() = %d, want 1", person.CompanyID())
 	}
 
 	person, err = NewPerson(
 		common.ID(3),
 		"Jane Doe",
 		"",
-		nil,
+		common.ID(0),
 	)
 	if err != nil {
 		t.Fatalf("NewPerson() without company error = %v", err)
 	}
-	if person.Company() != nil {
-		t.Fatal("person.Company() != nil")
+	if !person.CompanyID().IsZero() {
+		t.Fatalf("person.CompanyID() = %d, want 0", person.CompanyID())
 	}
 
 	for _, id := range []common.ID{0, -1} {
@@ -59,7 +54,7 @@ func TestNewPerson(t *testing.T) {
 			id,
 			"John Doe",
 			"Director",
-			nil,
+			common.ID(0),
 		)
 		if !errors.Is(err, ErrPersonIDInvalid) {
 			t.Fatalf(
@@ -74,7 +69,7 @@ func TestNewPerson(t *testing.T) {
 		common.ID(4),
 		" \t ",
 		"Director",
-		nil,
+		common.ID(0),
 	)
 	if !errors.Is(err, ErrPersonNameRequired) {
 		t.Fatalf(
@@ -82,19 +77,27 @@ func TestNewPerson(t *testing.T) {
 			err,
 		)
 	}
+
+	_, err = NewPerson(
+		common.ID(4),
+		"John Doe",
+		"Director",
+		common.ID(-1),
+	)
+	if !errors.Is(err, ErrPersonCompanyIDInvalid) {
+		t.Fatalf(
+			"NewPerson() error = %v, want ErrPersonCompanyIDInvalid",
+			err,
+		)
+	}
 }
 
 func TestPersonUpdate(t *testing.T) {
-	company, err := NewCompany(common.ID(1), "Acme ltd.", "")
-	if err != nil {
-		t.Fatalf("NewCompany() error = %v", err)
-	}
-
 	person, err := NewPerson(
 		common.ID(2),
 		"John Doe",
 		"Engineer",
-		&company,
+		common.ID(1),
 	)
 	if err != nil {
 		t.Fatalf("NewPerson() error = %v", err)
@@ -111,7 +114,7 @@ func TestPersonUpdate(t *testing.T) {
 	if person.Position() != "Director" {
 		t.Fatalf("person.Position() = %q, want %q", person.Position(), "Director")
 	}
-	if person.Company() != &company {
+	if person.CompanyID() != common.ID(1) {
 		t.Fatal("Update() changed company")
 	}
 
@@ -142,16 +145,11 @@ func FuzzPersonUpdate(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, name, position string) {
-		company, err := NewCompany(common.ID(1), "Acme ltd.", "")
-		if err != nil {
-			t.Fatalf("NewCompany() error = %v", err)
-		}
-
 		person, err := NewPerson(
 			common.ID(2),
 			"Original Name",
 			"Original Position",
-			&company,
+			common.ID(1),
 		)
 		if err != nil {
 			t.Fatalf("NewPerson() error = %v", err)
@@ -198,7 +196,7 @@ func FuzzPersonUpdate(f *testing.F) {
 		if person.ID() != common.ID(2) {
 			t.Fatalf("Update() changed person ID to %d", person.ID())
 		}
-		if person.Company() != &company {
+		if person.CompanyID() != common.ID(1) {
 			t.Fatal("Update() changed company")
 		}
 	})

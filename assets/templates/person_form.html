@@ -1,6 +1,6 @@
 {{define "person_form"}} {{template "layout_start" .}}
 
-<header>
+  <header>
       <hgroup>
           <h1>{{.Data.Heading}}</h1>
       </hgroup>
@@ -31,6 +31,51 @@
           />
       </label>
 
+      <label for="company_name">Company</label>
+
+      <div class="company-picker">
+          <fieldset role="group">
+              <input
+                  type="search"
+                  id="company_name"
+                  name="company_name"
+                  value="{{.Data.CompanyName}}"
+                  autocomplete="off"
+                  placeholder="Search companies"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-controls="company_options"
+                  aria-expanded="false"
+                  {{if .Data.CompanyError}}aria-invalid="true"{{end}}
+              />
+              <button
+                  type="button"
+                  id="clear_company"
+                  class="secondary outline"
+              >
+                  Clear
+              </button>
+          </fieldset>
+
+          <ul
+              id="company_options"
+              class="company-options"
+              role="listbox"
+              hidden
+          ></ul>
+      </div>
+
+      {{if .Data.CompanyError}}
+      <small>{{.Data.CompanyError}}</small>
+      {{end}}
+
+      <input
+          type="hidden"
+          id="company_id"
+          name="company_id"
+          value="{{if .Data.Input.CompanyID.IsValid}}{{.Data.Input.CompanyID.String}}{{end}}"
+      />
+
       <footer class="actions">
           <button type="submit">{{.Data.SubmitLabel}}</button>
           <a href="/persons" role="button" class="secondary outline">
@@ -38,5 +83,264 @@
           </a>
       </footer>
   </form>
+
+  <script>
+      (() => {
+          const picker = document.querySelector(".company-picker");
+          const companyName = document.getElementById("company_name");
+          const companyID = document.getElementById("company_id");
+          const clearCompany = document.getElementById("clear_company");
+          const companyOptions = document.getElementById("company_options");
+
+          let debounceTimer;
+          let requestController;
+          let visibleCompanies = [];
+          let activeIndex = -1;
+          let skipFocusLoad = false;
+
+          const focusCompanyName = () => {
+              if (document.activeElement === companyName) {
+                  return;
+              }
+
+              skipFocusLoad = true;
+              companyName.focus();
+          };
+
+          const resetActiveOption = () => {
+              activeIndex = -1;
+              companyName.removeAttribute("aria-activedescendant");
+          };
+
+          const setActiveOption = (index) => {
+              const options = companyOptions.querySelectorAll(
+                  '[role="option"]',
+              );
+
+              if (options.length === 0) {
+                  return;
+              }
+
+              if (activeIndex >= 0) {
+                  options[activeIndex].classList.remove("active");
+                  options[activeIndex].setAttribute(
+                      "aria-selected",
+                      "false",
+                  );
+              }
+
+              activeIndex = Math.max(
+                  0,
+                  Math.min(index, options.length - 1),
+              );
+
+              const option = options[activeIndex];
+              option.classList.add("active");
+              option.setAttribute("aria-selected", "true");
+              companyName.setAttribute(
+                  "aria-activedescendant",
+                  option.id,
+              );
+              option.scrollIntoView({block: "nearest"});
+          };
+
+          const closeOptions = () => {
+              resetActiveOption();
+              companyOptions.hidden = true;
+              companyName.setAttribute("aria-expanded", "false");
+          };
+
+          const showMessage = (message) => {
+              visibleCompanies = [];
+              resetActiveOption();
+              companyOptions.replaceChildren();
+
+              const item = document.createElement("li");
+              item.className = "empty";
+              item.textContent = message;
+              companyOptions.append(item);
+
+              companyOptions.hidden = false;
+              companyName.setAttribute("aria-expanded", "true");
+          };
+
+          const selectCompany = (company) => {
+              companyName.value = company.name;
+              companyID.value = company.id;
+              closeOptions();
+              focusCompanyName();
+          };
+
+          const renderOptions = (companies) => {
+              visibleCompanies = companies;
+              resetActiveOption();
+              companyOptions.replaceChildren();
+
+              if (companies.length === 0) {
+                  showMessage("No companies found");
+                  return;
+              }
+
+              for (const [index, company] of companies.entries()) {
+                  const item = document.createElement("li");
+                  item.id = `company_option_${index}`;
+                  item.setAttribute("role", "option");
+                  item.setAttribute("aria-selected", "false");
+                  item.textContent = company.name;
+
+                  item.addEventListener("mousedown", (event) => {
+                      event.preventDefault();
+                  });
+
+                  item.addEventListener("mouseenter", () => {
+                      setActiveOption(index);
+                  });
+
+                  item.addEventListener("click", () => {
+                      selectCompany(company);
+                  });
+
+                  companyOptions.append(item);
+              }
+
+              companyOptions.hidden = false;
+              companyName.setAttribute("aria-expanded", "true");
+          };
+
+          const loadOptions = async () => {
+              requestController?.abort();
+
+              const controller = new AbortController();
+              requestController = controller;
+
+              const query = new URLSearchParams({
+                  q: companyName.value.trim(),
+              });
+
+              try {
+                  const response = await fetch(
+                      `/companies?${query}`,
+                      {
+                          headers: {
+                              Accept: "application/json",
+                          },
+                          signal: controller.signal,
+                      },
+                  );
+
+                  if (!response.ok) {
+                      throw new Error(`HTTP ${response.status}`);
+                  }
+
+                  const companies = await response.json();
+
+                  if (requestController !== controller) {
+                      return;
+                  }
+
+                  renderOptions(companies);
+              } catch (error) {
+                  if (error.name === "AbortError") {
+                      return;
+                  }
+
+                  showMessage("Failed to load companies");
+              }
+          };
+
+          const scheduleLoad = () => {
+              clearTimeout(debounceTimer);
+              requestController?.abort();
+
+              debounceTimer = setTimeout(loadOptions, 200);
+          };
+
+          companyName.addEventListener("focus", () => {
+              if (skipFocusLoad) {
+                  skipFocusLoad = false;
+                  return;
+              }
+
+              loadOptions();
+          });
+
+          companyName.addEventListener("input", () => {
+              companyID.value = "";
+              scheduleLoad();
+          });
+
+          companyName.addEventListener("keydown", async (event) => {
+              if (event.key === "Escape") {
+                  if (!companyOptions.hidden) {
+                      event.preventDefault();
+                      closeOptions();
+                  }
+                  return;
+              }
+
+              if (event.key === "Enter") {
+                  if (activeIndex >= 0) {
+                      event.preventDefault();
+                      selectCompany(visibleCompanies[activeIndex]);
+                  }
+                  return;
+              }
+
+              if (
+                  event.key !== "ArrowDown" &&
+                  event.key !== "ArrowUp"
+              ) {
+                  return;
+              }
+
+              event.preventDefault();
+
+              if (companyOptions.hidden) {
+                  await loadOptions();
+              }
+
+              if (visibleCompanies.length === 0) {
+                  return;
+              }
+
+              if (activeIndex < 0) {
+                  setActiveOption(
+                      event.key === "ArrowDown"
+                          ? 0
+                          : visibleCompanies.length - 1,
+                  );
+                  return;
+              }
+
+              setActiveOption(
+                  activeIndex + (
+                      event.key === "ArrowDown" ? 1 : -1
+                  ),
+              );
+          });
+
+          clearCompany.addEventListener("click", () => {
+              clearTimeout(debounceTimer);
+              requestController?.abort();
+
+              companyName.value = "";
+              companyID.value = "";
+              closeOptions();
+              focusCompanyName();
+          });
+
+          document.addEventListener("click", (event) => {
+              if (!picker.contains(event.target)) {
+                  closeOptions();
+              }
+          });
+
+          document.addEventListener("focusin", (event) => {
+              if (!picker.contains(event.target)) {
+                  closeOptions();
+              }
+          });
+      })();
+  </script>
 
   {{template "layout_end" .}} {{end}}

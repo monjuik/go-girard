@@ -13,6 +13,8 @@ var (
 
 	ErrCompanyNotFound   = errors.New("company not found")
 	ErrCompanyNameExists = errors.New("company name already exists")
+
+	ErrPersonCompanyNotFound = errors.New("person company not found")
 )
 
 // PersonCommands provides operations to change person data.

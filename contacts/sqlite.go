@@ -67,6 +67,7 @@ func (q *SQLitePersonQueries) ListPersonRows(
 						COALESCE(company.name, '')
 		 			FROM person
 					LEFT JOIN company ON company.id = person.company
+						AND company.deleted = 0
 					WHERE person.deleted = 0
 					AND (
 						? = ''
@@ -117,20 +118,34 @@ func (q *SQLitePersonQueries) GetPerson(
 	id common.ID,
 ) (PersonView, error) {
 	view := PersonView{ID: id.String()}
+	var rawCompanyID int64
+
 	err := q.db.QueryRowContext(
 		ctx,
 		`
-			SELECT name, position
+			SELECT
+				person.name,
+				person.position,
+				COALESCE(company.id, 0),
+				COALESCE(company.name, '')
 			FROM person
-			WHERE id = ? AND deleted = 0
+			LEFT JOIN company
+				ON company.id = person.company
+				AND company.deleted = 0
+			WHERE person.id = ? AND person.deleted = 0
 		`,
 		id.Int64(),
-	).Scan(&view.Name, &view.Position)
+	).Scan(&view.Name, &view.Position, &rawCompanyID, &view.CompanyName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return PersonView{}, ErrPersonNotFound
 	}
 	if err != nil {
 		return PersonView{}, fmt.Errorf("query person: %w", err)
+	}
+
+	companyID := common.ID(rawCompanyID)
+	if companyID.IsValid() {
+		view.CompanyID = companyID.String()
 	}
 	return view, nil
 }
@@ -151,10 +166,14 @@ func (r *SQLitePersonRepository) Add(
 		personCompanyID(person),
 	)
 	if err != nil {
-		if isUniqueConstraint(err) {
+		switch {
+		case isUniqueConstraint(err):
 			return ErrPersonNameExists
+		case isFKConstraint(err):
+			return ErrPersonCompanyNotFound
+		default:
+			return fmt.Errorf("insert person: %w", err)
 		}
-		return fmt.Errorf("insert person: %w", err)
 	}
 
 	return nil
@@ -168,18 +187,23 @@ func (r *SQLitePersonRepository) Save(
 		ctx,
 		`
 			UPDATE person
-			SET name = ?, position = ?
+			SET name = ?, position = ?, company = ?
 			WHERE id = ? AND deleted = 0
 		`,
 		person.Name(),
 		person.Position(),
+		personCompanyID(person),
 		person.ID().Int64(),
 	)
 	if err != nil {
-		if isUniqueConstraint(err) {
+		switch {
+		case isUniqueConstraint(err):
 			return ErrPersonNameExists
+		case isFKConstraint(err):
+			return ErrPersonCompanyNotFound
+		default:
+			return fmt.Errorf("update person: %w", err)
 		}
-		return fmt.Errorf("update person: %w", err)
 	}
 
 	affected, err := result.RowsAffected()
@@ -398,14 +422,19 @@ func isUniqueConstraint(err error) bool {
 	return errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique
 }
 
+func isFKConstraint(err error) bool {
+	var sqliteErr sqlite3.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey
+}
+
 func personCompanyID(person Person) sql.NullInt64 {
-	company := person.Company()
-	if company == nil {
+	companyID := person.CompanyID()
+	if companyID.IsZero() {
 		return sql.NullInt64{}
 	}
 
 	return sql.NullInt64{
-		Int64: company.ID().Int64(),
+		Int64: companyID.Int64(),
 		Valid: true,
 	}
 }

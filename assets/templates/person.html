@@ -10,15 +10,30 @@
   <article role="status">Person saved.</article>
   {{end}}
 
-  <dl>
-      <dt>Position</dt>
-      <dd>
-          {{if .Data.Person.Position}}
-              {{.Data.Person.Position}}
-          {{else}}
-              &mdash;
-          {{end}}
-      </dd>
+  <dl class="grid">
+      <div>
+          <dt>Position</dt>
+          <dd>
+              {{if .Data.Person.Position}}
+                  {{.Data.Person.Position}}
+              {{else}}
+                  &mdash;
+              {{end}}
+          </dd>
+      </div>
+
+      <div>
+          <dt>Company</dt>
+          <dd>
+              {{if .Data.Person.CompanyName}}
+                  <a href="/companies/{{.Data.Person.CompanyID}}">
+                      {{.Data.Person.CompanyName}}
+                  </a>
+              {{else}}
+                  &mdash;
+              {{end}}
+          </dd>
+      </div>
   </dl>
 
   <footer class="actions">

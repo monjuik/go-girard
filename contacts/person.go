@@ -8,22 +8,24 @@ import (
 )
 
 var (
-	ErrPersonIDInvalid    = errors.New("person id is invalid")
-	ErrPersonNameRequired = errors.New("person name is required")
+	ErrPersonIDInvalid        = errors.New("person id is invalid")
+	ErrPersonNameRequired     = errors.New("person name is required")
+	ErrPersonCompanyIDInvalid = errors.New("person company id is invalid")
 )
 
 // Person represents a person domain entity.
 type Person struct {
-	id       common.ID
-	name     string
-	position string
-	company  *Company
+	id        common.ID
+	name      string
+	position  string
+	companyID common.ID
 }
 
 // PersonInput contains editable fields to add or update person data.
 type PersonInput struct {
-	Name     string
-	Position string
+	Name      string
+	Position  string
+	CompanyID common.ID
 }
 
 // PersonsFilter controls searching and paging in the persons list.
@@ -43,24 +45,30 @@ type PersonRowView struct {
 
 // PersonView contains data to show on an individual page.
 type PersonView struct {
-	ID       string
-	Name     string
-	Position string
+	ID          string
+	Name        string
+	Position    string
+	CompanyID   string
+	CompanyName string
 }
 
 func NewPerson(
 	id common.ID,
 	name string,
 	position string,
-	company *Company,
+	companyID common.ID,
 ) (Person, error) {
 	if !id.IsValid() {
 		return Person{}, ErrPersonIDInvalid
 	}
 
+	if !companyID.IsZero() && !companyID.IsValid() {
+		return Person{}, ErrPersonCompanyIDInvalid
+	}
+
 	person := Person{
-		id:      id,
-		company: company,
+		id:        id,
+		companyID: companyID,
 	}
 
 	if err := person.Update(name, position); err != nil {
@@ -93,6 +101,6 @@ func (p Person) Position() string {
 	return p.position
 }
 
-func (p Person) Company() *Company {
-	return p.company
+func (p Person) CompanyID() common.ID {
+	return p.companyID
 }

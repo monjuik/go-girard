@@ -89,12 +89,36 @@ func TestSQLitePersonQueries(t *testing.T) {
 	}
 
 	wantPerson := contacts.PersonView{
-		ID:       common.ID(101).String(),
-		Name:     "Anna Petrova",
-		Position: "Head of Operations",
+		ID:          common.ID(101).String(),
+		Name:        "Anna Petrova",
+		Position:    "Head of Operations",
+		CompanyID:   common.ID(1).String(),
+		CompanyName: "Northwind Logistics",
 	}
 	if person != wantPerson {
 		t.Fatalf("GetPerson() = %+v, want %+v", person, wantPerson)
+	}
+
+	if _, err := db.Exec(
+		"UPDATE company SET deleted = 1 WHERE id = 1",
+	); err != nil {
+		t.Fatalf("delete linked company: %v", err)
+	}
+
+	person, err = queries.GetPerson(context.Background(), common.ID(101))
+	if err != nil {
+		t.Fatalf("GetPerson() after company delete error = %v", err)
+	}
+
+	wantPerson.CompanyID = ""
+	wantPerson.CompanyName = ""
+
+	if person != wantPerson {
+		t.Fatalf(
+			"GetPerson() after company delete = %+v, want %+v",
+			person,
+			wantPerson,
+		)
 	}
 
 	for _, id := range []common.ID{104, 999} {
@@ -115,9 +139,16 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 	commands := contacts.NewPersonService(repository)
 	ctx := context.Background()
 
+	if _, err := db.Exec(
+		"INSERT INTO company (id, name) VALUES (1, 'Northwind Logistics')",
+	); err != nil {
+		t.Fatalf("insert company: %v", err)
+	}
+
 	annaID, err := commands.CreatePerson(ctx, contacts.PersonInput{
-		Name:     "  Anna Petrova  ",
-		Position: "  Engineer  ",
+		Name:      "  Anna Petrova  ",
+		Position:  "  Engineer  ",
+		CompanyID: common.ID(1),
 	})
 	if err != nil {
 		t.Fatalf("CreatePerson() error = %v", err)
@@ -131,6 +162,20 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 			Position: "Engineer",
 		},
 	)
+	var createdCompanyID sql.NullInt64
+	err = db.QueryRow(
+		"SELECT company FROM person WHERE id = ?",
+		annaID.Int64(),
+	).Scan(&createdCompanyID)
+	if err != nil {
+		t.Fatalf("query created person company: %v", err)
+	}
+	if !createdCompanyID.Valid || createdCompanyID.Int64 != 1 {
+		t.Fatalf(
+			"created person company = %+v, want 1",
+			createdCompanyID,
+		)
+	}
 
 	_, err = commands.CreatePerson(
 		ctx,
@@ -147,19 +192,16 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreatePerson(Mark) error = %v", err)
 	}
-	_, err = db.Exec(
-		"INSERT INTO company (id, name) VALUES (1, 'Northwind Logistics')",
-	)
-	if err != nil {
-		t.Fatalf("insert company: %v", err)
-	}
 
-	_, err = db.Exec(
-		"UPDATE person SET company = 1 WHERE id = ?",
-		annaID.Int64(),
-	)
-	if err != nil {
-		t.Fatalf("assign company: %v", err)
+	_, err = commands.CreatePerson(ctx, contacts.PersonInput{
+		Name:      "Missing Company Person",
+		CompanyID: common.ID(999),
+	})
+	if !errors.Is(err, contacts.ErrPersonCompanyNotFound) {
+		t.Fatalf(
+			"CreatePerson() with missing company error = %v, want ErrPersonCompanyNotFound",
+			err,
+		)
 	}
 
 	err = commands.UpdatePerson(
@@ -172,8 +214,9 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 	}
 
 	err = commands.UpdatePerson(ctx, annaID, contacts.PersonInput{
-		Name:     "  Alice Petrova  ",
-		Position: "  Director  ",
+		Name:      "  Alice Petrova  ",
+		Position:  "  Director  ",
+		CompanyID: common.ID(1),
 	})
 	if err != nil {
 		t.Fatalf("UpdatePerson() error = %v", err)
@@ -199,6 +242,76 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 
 	if !companyID.Valid || companyID.Int64 != 1 {
 		t.Fatalf("person company = %+v, want 1", companyID)
+	}
+
+	err = commands.UpdatePerson(ctx, annaID, contacts.PersonInput{
+		Name:     "Alice Petrova",
+		Position: "Director",
+	})
+	if err != nil {
+		t.Fatalf("clear person company error = %v", err)
+	}
+
+	err = commands.UpdatePerson(ctx, markID, contacts.PersonInput{
+		Name:      "Changed Mark",
+		CompanyID: common.ID(999),
+	})
+	if !errors.Is(err, contacts.ErrPersonCompanyNotFound) {
+		t.Fatalf(
+			"UpdatePerson() with missing company error = %v, want ErrPersonCompanyNotFound",
+			err,
+		)
+	}
+
+	assertPersonInput(
+		t,
+		db,
+		markID,
+		contacts.PersonInput{Name: "Mark Jensen"},
+	)
+
+	companyID = sql.NullInt64{}
+	err = db.QueryRow(
+		"SELECT company FROM person WHERE id = ?",
+		annaID.Int64(),
+	).Scan(&companyID)
+	if err != nil {
+		t.Fatalf("query cleared person company: %v", err)
+	}
+	if companyID.Valid {
+		t.Fatalf("cleared person company = %+v, want NULL", companyID)
+	}
+
+	if _, err := db.Exec(
+		"UPDATE company SET deleted = 1 WHERE id = 1",
+	); err != nil {
+		t.Fatalf("delete company: %v", err)
+	}
+
+	err = commands.UpdatePerson(ctx, markID, contacts.PersonInput{
+		Name:      "Mark Jensen",
+		CompanyID: common.ID(1),
+	})
+	if err != nil {
+		t.Fatalf(
+			"UpdatePerson() with deleted company error = %v",
+			err,
+		)
+	}
+
+	var deletedCompanyID sql.NullInt64
+	err = db.QueryRow(
+		"SELECT company FROM person WHERE id = ?",
+		markID.Int64(),
+	).Scan(&deletedCompanyID)
+	if err != nil {
+		t.Fatalf("query deleted company link: %v", err)
+	}
+	if !deletedCompanyID.Valid || deletedCompanyID.Int64 != 1 {
+		t.Fatalf(
+			"deleted company link = %+v, want 1",
+			deletedCompanyID,
+		)
 	}
 
 	if err := commands.DeletePerson(ctx, annaID); err != nil {
@@ -528,9 +641,9 @@ func TestCompanyServiceWithSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListPersonRows() error = %v", err)
 	}
-	if len(personRows) != 1 || personRows[0].Company != "Northwind Group" {
+	if len(personRows) != 1 || personRows[0].Company != "" {
 		t.Fatalf(
-			"person rows after company delete = %+v, want linked company",
+			"person rows after company delete = %+v, want no company",
 			personRows,
 		)
 	}

@@ -332,9 +332,11 @@ func TestPersonsPageRejectsInvalidSkip(t *testing.T) {
 func TestPersonPages(t *testing.T) {
 	fixture := newServerFixture(t)
 	fixture.personQueries.person = contacts.PersonView{
-		ID:       "101",
-		Name:     "Anna Petrova",
-		Position: "Engineer",
+		ID:          "101",
+		Name:        "Anna Petrova",
+		Position:    "Engineer",
+		CompanyID:   "7",
+		CompanyName: "Northwind Logistics",
 	}
 
 	response := fixture.get("/persons/new")
@@ -366,7 +368,23 @@ func TestPersonPages(t *testing.T) {
 		`href="/persons/101/edit"`,
 		"Person saved.",
 		`action="/persons/101/delete"`,
+		`class="grid"`,
+		`href="/companies/7"`,
+		"Northwind Logistics",
 	)
+
+	fixture.personQueries.person.CompanyID = ""
+	fixture.personQueries.person.CompanyName = ""
+
+	response = fixture.get("/persons/101")
+	assertStatus(t, response, http.StatusOK)
+
+	if strings.Contains(response.Body.String(), `href="/companies/7"`) {
+		t.Fatal("person without company contains company link")
+	}
+
+	fixture.personQueries.person.CompanyID = "7"
+	fixture.personQueries.person.CompanyName = "Northwind Logistics"
 
 	response = fixture.get("/persons/101/edit")
 	assertStatus(t, response, http.StatusOK)
@@ -377,6 +395,15 @@ func TestPersonPages(t *testing.T) {
 		`action="/persons/101"`,
 		`value="Anna Petrova"`,
 		`value="Engineer"`,
+		`name="company_name"`,
+		`value="Northwind Logistics"`,
+		`id="clear_company"`,
+		`name="company_id"`,
+		`value="7"`,
+		`role="combobox"`,
+		`aria-controls="company_options"`,
+		`id="company_options"`,
+		`role="listbox"`,
 	)
 
 	fixture.personQueries.err = contacts.ErrPersonNotFound
@@ -459,8 +486,10 @@ func TestCreatePerson(t *testing.T) {
 	fixture.personCommands.createID = common.ID(101)
 
 	values := url.Values{
-		"name":     {"  Anna Petrova  "},
-		"position": {"  Engineer  "},
+		"name":         {"  Anna Petrova  "},
+		"position":     {"  Engineer  "},
+		"company_name": {"Northwind Logistics"},
+		"company_id":   {"7"},
 	}
 
 	response := fixture.postForm("/persons", values)
@@ -470,8 +499,9 @@ func TestCreatePerson(t *testing.T) {
 	}
 
 	wantInput := contacts.PersonInput{
-		Name:     "  Anna Petrova  ",
-		Position: "  Engineer  ",
+		Name:      "  Anna Petrova  ",
+		Position:  "  Engineer  ",
+		CompanyID: common.ID(7),
 	}
 	if fixture.personCommands.createInput != wantInput {
 		t.Fatalf(
@@ -502,11 +532,38 @@ func TestCreatePerson(t *testing.T) {
 			response,
 			tt.message,
 			`value="  Anna Petrova  "`,
+			`value="Northwind Logistics"`,
 		)
 	}
 
+	fixture.personCommands.createErr = contacts.ErrPersonCompanyNotFound
+
+	response = fixture.postForm("/persons", values)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+	assertBodyContains(
+		t,
+		response,
+		"Selected company no longer exists",
+		`value="Northwind Logistics"`,
+	)
+
 	fixture.personCommands.createErr = nil
+	values.Set("company_id", "")
 	callsBefore := fixture.personCommands.createCalls
+
+	response = fixture.postForm("/persons", values)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+	assertBodyContains(
+		t,
+		response,
+		"Select a company from the list or clear the field",
+		`value="Northwind Logistics"`,
+	)
+	if fixture.personCommands.createCalls != callsBefore {
+		t.Fatal("unselected company reached CreatePerson")
+	}
+
+	values.Set("company_id", "7")
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -530,8 +587,10 @@ func TestUpdatePerson(t *testing.T) {
 	fixture := newServerFixture(t)
 
 	values := url.Values{
-		"name":     {"  Anna Petrova  "},
-		"position": {"  Director  "},
+		"name":         {"  Anna Petrova  "},
+		"position":     {"  Director  "},
+		"company_name": {"Northwind Logistics"},
+		"company_id":   {"7"},
 	}
 
 	response := fixture.postForm("/persons/101", values)
@@ -548,8 +607,9 @@ func TestUpdatePerson(t *testing.T) {
 	}
 
 	wantInput := contacts.PersonInput{
-		Name:     "  Anna Petrova  ",
-		Position: "  Director  ",
+		Name:      "  Anna Petrova  ",
+		Position:  "  Director  ",
+		CompanyID: common.ID(7),
 	}
 	if fixture.personCommands.updateInput != wantInput {
 		t.Fatalf(
@@ -568,11 +628,54 @@ func TestUpdatePerson(t *testing.T) {
 		"A person with this name already exists",
 		`action="/persons/101"`,
 		`value="  Anna Petrova  "`,
+		`value="Northwind Logistics"`,
 	)
+
+	fixture.personCommands.updateErr = nil
+	values.Set("company_id", "")
+	callsBefore := fixture.personCommands.updateCalls
+
+	response = fixture.postForm("/persons/101", values)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+	assertBodyContains(
+		t,
+		response,
+		"Select a company from the list or clear the field",
+		`value="Northwind Logistics"`,
+	)
+
+	if fixture.personCommands.updateCalls != callsBefore {
+		t.Fatal("unselected company reached UpdatePerson")
+	}
+
+	values.Set("company_id", "7")
 
 	fixture.personCommands.updateErr = contacts.ErrPersonNotFound
 	response = fixture.postForm("/persons/101", values)
 	assertStatus(t, response, http.StatusNotFound)
+
+	fixture.personCommands.updateErr = contacts.ErrPersonCompanyNotFound
+	response = fixture.postForm("/persons/101", values)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+	assertBodyContains(
+		t,
+		response,
+		"Selected company no longer exists",
+		`action="/persons/101"`,
+		`value="Northwind Logistics"`,
+	)
+
+	fixture.personCommands.updateErr = nil
+	callsBefore = fixture.personCommands.updateCalls
+
+	values.Set("company_id", "invalid")
+	response = fixture.postForm("/persons/101", values)
+
+	assertStatus(t, response, http.StatusBadRequest)
+
+	if fixture.personCommands.updateCalls != callsBefore {
+		t.Fatal("invalid company ID reached UpdatePerson")
+	}
 }
 
 func TestDeletePerson(t *testing.T) {
@@ -1054,4 +1157,52 @@ func FuzzPersonFormEndpoints(f *testing.F) {
 			)
 		}
 	})
+}
+
+func TestCompaniesJSONSearch(t *testing.T) {
+	fixture := newServerFixture(t)
+	fixture.companyQueries.rows = []contacts.CompanyRowView{
+		{
+			ID:      "101",
+			Name:    "Northwind Logistics",
+			Country: "Cyprus",
+		},
+	}
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/companies?q=north&skip=40",
+		nil,
+	)
+	request.Header.Set("Accept", "application/json")
+
+	response := fixture.serve(request)
+	assertStatus(t, response, http.StatusOK)
+
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf(
+			"Content-Type = %q, want application/json",
+			contentType,
+		)
+	}
+
+	filter := fixture.companyQueries.filter
+	if filter.Query != "north" {
+		t.Fatalf("filter.Query = %q, want north", filter.Query)
+	}
+	if filter.Skip != 0 {
+		t.Fatalf("filter.Skip = %d, want 0", filter.Skip)
+	}
+	if filter.Limit != rowsPerPage {
+		t.Fatalf(
+			"filter.Limit = %d, want %d",
+			filter.Limit,
+			rowsPerPage,
+		)
+	}
+
+	wantBody := `[{"id":"101","name":"Northwind Logistics"}]`
+	if body := response.Body.String(); body != wantBody {
+		t.Fatalf("response body = %q, want %q", body, wantBody)
+	}
 }

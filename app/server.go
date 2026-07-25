@@ -1,11 +1,13 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/monjuik/go-girard/common"
 	"github.com/monjuik/go-girard/contacts"
@@ -32,11 +34,13 @@ type PersonPageData struct {
 
 // PersonFormData contains data for the create and edit form.
 type PersonFormData struct {
-	Heading     string
-	Action      string
-	SubmitLabel string
-	Input       contacts.PersonInput
-	NameError   string
+	Heading      string
+	Action       string
+	SubmitLabel  string
+	Input        contacts.PersonInput
+	CompanyName  string
+	NameError    string
+	CompanyError string
 }
 
 type CompaniesPageData struct {
@@ -44,6 +48,11 @@ type CompaniesPageData struct {
 	Query       string
 	PreviousURL string
 	NextURL     string
+}
+
+type companyOption struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // CompanyPageData contains data for the read-only conpany page.
@@ -201,15 +210,27 @@ func (s *Server) handleEditPerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	input := contacts.PersonInput{
+		Name:     person.Name,
+		Position: person.Position,
+	}
+
+	if person.CompanyID != "" {
+		companyID, err := common.IDFromString(person.CompanyID)
+		if err != nil {
+			http.Error(w, "failed to get person", http.StatusInternalServerError)
+			return
+		}
+
+		input.CompanyID = companyID
+	}
 
 	s.renderPersonForm(w, PersonFormData{
 		Heading:     "Edit person",
 		Action:      "/persons/" + person.ID,
 		SubmitLabel: "Save changes",
-		Input: contacts.PersonInput{
-			Name:     person.Name,
-			Position: person.Position,
-		},
+		Input:       input,
+		CompanyName: person.CompanyName,
 	}, http.StatusOK)
 }
 
@@ -217,6 +238,20 @@ func (s *Server) handleCreatePerson(w http.ResponseWriter, r *http.Request) {
 	input, err := parsePersonInput(w, r)
 	if err != nil {
 		writePersonFormError(w, err)
+		return
+	}
+
+	companyName := r.PostForm.Get("company_name")
+
+	if companyError := personCompanySelectionError(input, companyName); companyError != "" {
+		s.renderPersonForm(w, PersonFormData{
+			Heading:      "New person",
+			Action:       "/persons",
+			SubmitLabel:  "Create person",
+			Input:        input,
+			CompanyName:  companyName,
+			CompanyError: companyError,
+		}, http.StatusUnprocessableEntity)
 		return
 	}
 
@@ -228,6 +263,19 @@ func (s *Server) handleCreatePerson(w http.ResponseWriter, r *http.Request) {
 			SubmitLabel: "Create person",
 			Input:       input,
 			NameError:   nameError,
+			CompanyName: companyName,
+		}, http.StatusUnprocessableEntity)
+		return
+	}
+
+	if companyError := personCompanyError(err); companyError != "" {
+		s.renderPersonForm(w, PersonFormData{
+			Heading:      "New person",
+			Action:       "/persons",
+			SubmitLabel:  "Create person",
+			Input:        input,
+			CompanyName:  companyName,
+			CompanyError: companyError,
 		}, http.StatusUnprocessableEntity)
 		return
 	}
@@ -252,6 +300,23 @@ func (s *Server) handleUpdatePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	companyName := r.PostForm.Get("company_name")
+
+	if companyError := personCompanySelectionError(
+		input,
+		companyName,
+	); companyError != "" {
+		s.renderPersonForm(w, PersonFormData{
+			Heading:      "Edit person",
+			Action:       "/persons/" + id.String(),
+			SubmitLabel:  "Save changes",
+			Input:        input,
+			CompanyName:  companyName,
+			CompanyError: companyError,
+		}, http.StatusUnprocessableEntity)
+		return
+	}
+
 	err = s.personCommands.UpdatePerson(r.Context(), id, input)
 	if nameError := personNameError(err); nameError != "" {
 		s.renderPersonForm(w, PersonFormData{
@@ -260,11 +325,24 @@ func (s *Server) handleUpdatePerson(w http.ResponseWriter, r *http.Request) {
 			SubmitLabel: "Save changes",
 			Input:       input,
 			NameError:   nameError,
+			CompanyName: companyName,
 		}, http.StatusUnprocessableEntity)
 		return
 	}
 	if errors.Is(err, contacts.ErrPersonNotFound) {
 		http.NotFound(w, r)
+		return
+	}
+
+	if companyError := personCompanyError(err); companyError != "" {
+		s.renderPersonForm(w, PersonFormData{
+			Heading:      "Edit person",
+			Action:       "/persons/" + id.String(),
+			SubmitLabel:  "Save changes",
+			Input:        input,
+			CompanyName:  companyName,
+			CompanyError: companyError,
+		}, http.StatusUnprocessableEntity)
 		return
 	}
 	if err != nil {
@@ -300,6 +378,11 @@ func (s *Server) handleDeletePerson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCompanies(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Accept") == "application/json" {
+		s.handleCompanyOptions(w, r)
+		return
+	}
+
 	values := r.URL.Query()
 	query := values.Get("q")
 
@@ -351,6 +434,48 @@ func (s *Server) handleCompanies(w http.ResponseWriter, r *http.Request) {
 		ActiveMenu: "companies",
 		Data:       data,
 	})
+}
+
+func (s *Server) handleCompanyOptions(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	rows, err := s.companyQueries.ListCompanyRows(
+		r.Context(),
+		contacts.CompaniesFilter{
+			Query: r.URL.Query().Get("q"),
+			Limit: rowsPerPage,
+		},
+	)
+	if err != nil {
+		http.Error(
+			w,
+			"failed to search companies",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	options := make([]companyOption, len(rows))
+	for i, row := range rows {
+		options[i] = companyOption{
+			ID:   row.ID,
+			Name: row.Name,
+		}
+	}
+
+	payload, err := json.Marshal(options)
+	if err != nil {
+		http.Error(
+			w,
+			"failed to encode companies",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(payload)
 }
 
 func (s *Server) handleCompany(w http.ResponseWriter, r *http.Request) {
@@ -575,24 +700,43 @@ func personNameError(err error) string {
 	}
 }
 
+func personCompanyError(err error) string {
+	if errors.Is(err, contacts.ErrPersonCompanyNotFound) {
+		return "Selected company no longer exists"
+	}
+	return ""
+}
+
 func parsePersonInput(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (contacts.PersonInput, error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxPersonFormBodySize)
-	if err := r.ParseForm(); err != nil {
+	var err error
+	if err = r.ParseForm(); err != nil {
 		return contacts.PersonInput{}, err
 	}
 
+	var companyID common.ID
+	if value := r.PostForm.Get("company_id"); value != "" {
+		companyID, err = common.IDFromString(value)
+		if err != nil {
+			return contacts.PersonInput{}, fmt.Errorf(
+				"parse company id: %w",
+				err,
+			)
+		}
+	}
+
 	return contacts.PersonInput{
-		Name:     r.PostForm.Get("name"),
-		Position: r.PostForm.Get("position"),
+		Name:      r.PostForm.Get("name"),
+		Position:  r.PostForm.Get("position"),
+		CompanyID: companyID,
 	}, nil
 }
 
 func writePersonFormError(w http.ResponseWriter, err error) {
-	var maxBytesError *http.MaxBytesError
-	if errors.As(err, &maxBytesError) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		http.Error(
 			w,
 			"request body too large",
@@ -671,8 +815,7 @@ func companyNameError(err error) string {
 }
 
 func writeCompanyFormError(w http.ResponseWriter, err error) {
-	var maxBytesError *http.MaxBytesError
-	if errors.As(err, &maxBytesError) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		http.Error(
 			w,
 			"request body too large",
@@ -682,4 +825,11 @@ func writeCompanyFormError(w http.ResponseWriter, err error) {
 	}
 
 	http.Error(w, "invalid form", http.StatusBadRequest)
+}
+
+func personCompanySelectionError(input contacts.PersonInput, companyName string) string {
+	if input.CompanyID.IsZero() && strings.TrimSpace(companyName) != "" {
+		return "Select a company from the list or clear the field"
+	}
+	return ""
 }

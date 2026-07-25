@@ -29,7 +29,7 @@ func (s *PersonService) CreatePerson(
 		common.NewID(),
 		input.Name,
 		input.Position,
-		nil,
+		input.CompanyID,
 	)
 	if err != nil {
 		return 0, err
@@ -51,7 +51,7 @@ func (s *PersonService) UpdatePerson(
 		id,
 		input.Name,
 		input.Position,
-		nil,
+		input.CompanyID,
 	)
 	if err != nil {
 		return err
