@@ -36,6 +36,13 @@
       </div>
   </dl>
 
+  {{if .Data.Note}}
+  <hr />
+  <section class="person-note">
+      {{.Data.Note}}
+  </section>
+  {{end}}
+
   <footer class="actions">
       <a href="/persons/{{.Data.Person.ID}}/edit" role="button">
           Edit

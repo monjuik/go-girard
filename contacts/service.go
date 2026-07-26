@@ -30,6 +30,7 @@ func (s *PersonService) CreatePerson(
 		input.Name,
 		input.Position,
 		input.CompanyID,
+		input.Note,
 	)
 	if err != nil {
 		return 0, err
@@ -52,6 +53,7 @@ func (s *PersonService) UpdatePerson(
 		input.Name,
 		input.Position,
 		input.CompanyID,
+		input.Note,
 	)
 	if err != nil {
 		return err

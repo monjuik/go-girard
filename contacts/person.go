@@ -19,6 +19,7 @@ type Person struct {
 	name      string
 	position  string
 	companyID common.ID
+	note      string
 }
 
 // PersonInput contains editable fields to add or update person data.
@@ -26,6 +27,7 @@ type PersonInput struct {
 	Name      string
 	Position  string
 	CompanyID common.ID
+	Note      string
 }
 
 // PersonsFilter controls searching and paging in the persons list.
@@ -50,6 +52,7 @@ type PersonView struct {
 	Position    string
 	CompanyID   string
 	CompanyName string
+	Note        string
 }
 
 func NewPerson(
@@ -57,6 +60,7 @@ func NewPerson(
 	name string,
 	position string,
 	companyID common.ID,
+	note string,
 ) (Person, error) {
 	if !id.IsValid() {
 		return Person{}, ErrPersonIDInvalid
@@ -71,14 +75,14 @@ func NewPerson(
 		companyID: companyID,
 	}
 
-	if err := person.Update(name, position); err != nil {
+	if err := person.Update(name, position, note); err != nil {
 		return Person{}, err
 	}
 
 	return person, nil
 }
 
-func (p *Person) Update(name string, position string) error {
+func (p *Person) Update(name, position, note string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return ErrPersonNameRequired
@@ -86,6 +90,7 @@ func (p *Person) Update(name string, position string) error {
 
 	p.name = name
 	p.position = strings.TrimSpace(position)
+	p.note = note
 	return nil
 }
 
@@ -103,4 +108,8 @@ func (p Person) Position() string {
 
 func (p Person) CompanyID() common.ID {
 	return p.companyID
+}
+
+func (p Person) Note() string {
+	return p.note
 }

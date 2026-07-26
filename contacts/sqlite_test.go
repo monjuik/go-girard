@@ -92,6 +92,7 @@ func TestSQLitePersonQueries(t *testing.T) {
 		ID:          common.ID(101).String(),
 		Name:        "Anna Petrova",
 		Position:    "Head of Operations",
+		Note:        "Contact via **email**.",
 		CompanyID:   common.ID(1).String(),
 		CompanyName: "Northwind Logistics",
 	}
@@ -149,6 +150,7 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 		Name:      "  Anna Petrova  ",
 		Position:  "  Engineer  ",
 		CompanyID: common.ID(1),
+		Note:      "## Responsibilities\n\n- Operations\n- Reporting",
 	})
 	if err != nil {
 		t.Fatalf("CreatePerson() error = %v", err)
@@ -160,6 +162,7 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 		contacts.PersonInput{
 			Name:     "Anna Petrova",
 			Position: "Engineer",
+			Note:     "## Responsibilities\n\n- Operations\n- Reporting",
 		},
 	)
 	var createdCompanyID sql.NullInt64
@@ -217,6 +220,7 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 		Name:      "  Alice Petrova  ",
 		Position:  "  Director  ",
 		CompanyID: common.ID(1),
+		Note:      "Contact via **email**",
 	})
 	if err != nil {
 		t.Fatalf("UpdatePerson() error = %v", err)
@@ -228,6 +232,7 @@ func TestPersonServiceWithSQLite(t *testing.T) {
 		contacts.PersonInput{
 			Name:     "Alice Petrova",
 			Position: "Director",
+			Note:     "Contact via **email**",
 		},
 	)
 
@@ -398,11 +403,11 @@ func insertPersonFixtures(t *testing.T, db *sql.DB) {
 			(1, 'Northwind Logistics'),
 			(2, 'Acme_100%');
 
-		INSERT INTO person (id, name, position, company, deleted) VALUES
-			(101, 'Anna Petrova', 'Head of Operations', 1, 0),
-			(102, 'Mark Jensen', 'Founder', NULL, 0),
-			(103, 'Zoe Miller', 'Engineer', 2, 0),
-			(104, 'Deleted Person', 'Former', NULL, 1);
+		INSERT INTO person (id, name, position, note, company, deleted) VALUES
+			(101, 'Anna Petrova', 'Head of Operations', 'Contact via **email**.', 1, 0),
+			(102, 'Mark Jensen', 'Founder', '', NULL, 0),
+			(103, 'Zoe Miller', 'Engineer', '', 2, 0),
+			(104, 'Deleted Person', 'Former', '', NULL, 1);
 	`)
 	if err != nil {
 		t.Fatalf("insert fixtures: %v", err)
@@ -419,9 +424,9 @@ func assertPersonInput(
 
 	var got contacts.PersonInput
 	err := db.QueryRow(
-		"SELECT name, position FROM person WHERE id = ?",
+		"SELECT name, position, note FROM person WHERE id = ?",
 		id.Int64(),
-	).Scan(&got.Name, &got.Position)
+	).Scan(&got.Name, &got.Position, &got.Note)
 	if err != nil {
 		t.Fatalf("query person: %v", err)
 	}

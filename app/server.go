@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,6 +30,7 @@ type PersonsPageData struct {
 // PersonPageData contains data for the read-only person page.
 type PersonPageData struct {
 	Person contacts.PersonView
+	Note   template.HTML
 	Saved  bool
 }
 
@@ -195,11 +197,17 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	noteHTML, err := renderMarkdown(person.Note)
+	if err != nil {
+		noteHTML = "<p>Error: markdown engine failed to render person note</p>"
+	}
+
 	s.templates.Render(w, "person", PageData{
 		Title:      person.Name,
 		ActiveMenu: "persons",
 		Data: PersonPageData{
 			Person: person,
+			Note:   noteHTML,
 			Saved:  r.URL.Query().Get("saved") == "1",
 		},
 	})
@@ -213,6 +221,7 @@ func (s *Server) handleEditPerson(w http.ResponseWriter, r *http.Request) {
 	input := contacts.PersonInput{
 		Name:     person.Name,
 		Position: person.Position,
+		Note:     person.Note,
 	}
 
 	if person.CompanyID != "" {
@@ -732,6 +741,7 @@ func parsePersonInput(
 		Name:      r.PostForm.Get("name"),
 		Position:  r.PostForm.Get("position"),
 		CompanyID: companyID,
+		Note:      r.PostForm.Get("note"),
 	}, nil
 }
 

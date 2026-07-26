@@ -154,4 +154,11 @@ var migrations = []migration{
 			WHERE deleted = 0;
 		`,
 	},
+	{
+		name: "002_person_note",
+		sql: `
+			ALTER TABLE person
+			ADD COLUMN note TEXT NOT NULL DEFAULT '';
+		`,
+	},
 }

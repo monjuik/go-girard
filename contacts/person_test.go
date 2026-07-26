@@ -14,6 +14,7 @@ func TestNewPerson(t *testing.T) {
 		"  John Doe  ",
 		"  Head of Operations  ",
 		common.ID(1),
+		"",
 	)
 	if err != nil {
 		t.Fatalf("NewPerson() error = %v", err)
@@ -41,6 +42,7 @@ func TestNewPerson(t *testing.T) {
 		"Jane Doe",
 		"",
 		common.ID(0),
+		"",
 	)
 	if err != nil {
 		t.Fatalf("NewPerson() without company error = %v", err)
@@ -55,6 +57,7 @@ func TestNewPerson(t *testing.T) {
 			"John Doe",
 			"Director",
 			common.ID(0),
+			"",
 		)
 		if !errors.Is(err, ErrPersonIDInvalid) {
 			t.Fatalf(
@@ -70,6 +73,7 @@ func TestNewPerson(t *testing.T) {
 		" \t ",
 		"Director",
 		common.ID(0),
+		"",
 	)
 	if !errors.Is(err, ErrPersonNameRequired) {
 		t.Fatalf(
@@ -83,6 +87,7 @@ func TestNewPerson(t *testing.T) {
 		"John Doe",
 		"Director",
 		common.ID(-1),
+		"",
 	)
 	if !errors.Is(err, ErrPersonCompanyIDInvalid) {
 		t.Fatalf(
@@ -98,12 +103,13 @@ func TestPersonUpdate(t *testing.T) {
 		"John Doe",
 		"Engineer",
 		common.ID(1),
+		"",
 	)
 	if err != nil {
 		t.Fatalf("NewPerson() error = %v", err)
 	}
 
-	err = person.Update("  Jane Doe  ", "  Director  ")
+	err = person.Update("  Jane Doe  ", "  Director  ", "")
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -118,7 +124,7 @@ func TestPersonUpdate(t *testing.T) {
 		t.Fatal("Update() changed company")
 	}
 
-	err = person.Update(" \t ", "Invalid")
+	err = person.Update(" \t ", "Invalid", "")
 	if !errors.Is(err, ErrPersonNameRequired) {
 		t.Fatalf("Update() error = %v, want ErrPersonNameRequired", err)
 	}
@@ -150,12 +156,13 @@ func FuzzPersonUpdate(f *testing.F) {
 			"Original Name",
 			"Original Position",
 			common.ID(1),
+			"",
 		)
 		if err != nil {
 			t.Fatalf("NewPerson() error = %v", err)
 		}
 
-		err = person.Update(name, position)
+		err = person.Update(name, position, "")
 
 		wantName := strings.TrimSpace(name)
 		if wantName == "" {

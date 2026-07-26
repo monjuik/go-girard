@@ -76,6 +76,16 @@
           value="{{if .Data.Input.CompanyID.IsValid}}{{.Data.Input.CompanyID.String}}{{end}}"
       />
 
+      <label>
+          Note
+          <textarea
+              class="markdown-input"
+              name="note"
+              rows="12"
+              placeholder="Markdown is supported"
+          >{{.Data.Input.Note}}</textarea>
+      </label>
+
       <footer class="actions">
           <button type="submit">{{.Data.SubmitLabel}}</button>
           <a href="/persons" role="button" class="secondary outline">

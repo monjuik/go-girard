@@ -126,6 +126,7 @@ func (q *SQLitePersonQueries) GetPerson(
 			SELECT
 				person.name,
 				person.position,
+				person.note,
 				COALESCE(company.id, 0),
 				COALESCE(company.name, '')
 			FROM person
@@ -135,7 +136,7 @@ func (q *SQLitePersonQueries) GetPerson(
 			WHERE person.id = ? AND person.deleted = 0
 		`,
 		id.Int64(),
-	).Scan(&view.Name, &view.Position, &rawCompanyID, &view.CompanyName)
+	).Scan(&view.Name, &view.Position, &view.Note, &rawCompanyID, &view.CompanyName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return PersonView{}, ErrPersonNotFound
 	}
@@ -157,12 +158,13 @@ func (r *SQLitePersonRepository) Add(
 	_, err := r.db.ExecContext(
 		ctx,
 		`
-			INSERT INTO person (id, name, position, company)
-			VALUES (?, ?, ?, ?)
+			INSERT INTO person (id, name, position, note, company)
+			VALUES (?, ?, ?, ?, ?)
 		`,
 		person.ID().Int64(),
 		person.Name(),
 		person.Position(),
+		person.Note(),
 		personCompanyID(person),
 	)
 	if err != nil {
@@ -187,11 +189,12 @@ func (r *SQLitePersonRepository) Save(
 		ctx,
 		`
 			UPDATE person
-			SET name = ?, position = ?, company = ?
+			SET name = ?, position = ?, note = ?, company = ?
 			WHERE id = ? AND deleted = 0
 		`,
 		person.Name(),
 		person.Position(),
+		person.Note(),
 		personCompanyID(person),
 		person.ID().Int64(),
 	)

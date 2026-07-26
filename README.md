@@ -19,6 +19,12 @@ Joe Girard was an American salesman recognised by the Guinness Book of World Rec
 
 - Stores data about persons you are in touch. Name of a person should be unique. This is made on purpose. Better rename second John Smith in your app than confuse him by sending second welcome-message.
 
+## How to use
+
+### Markdown in the notes
+
+Note fields support CommonMark with strikethrough `~~send slides~~` and task lists `- [ ] send the slides`.
+
 ## Development
 
 Run all tests:

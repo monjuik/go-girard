@@ -337,6 +337,7 @@ func TestPersonPages(t *testing.T) {
 		Position:    "Engineer",
 		CompanyID:   "7",
 		CompanyName: "Northwind Logistics",
+		Note:        "## Responsibilities\n\n- **Operations**\n- [x] Reporting",
 	}
 
 	response := fixture.get("/persons/new")
@@ -371,6 +372,11 @@ func TestPersonPages(t *testing.T) {
 		`class="grid"`,
 		`href="/companies/7"`,
 		"Northwind Logistics",
+		`class="person-note"`,
+		`<h2>Responsibilities</h2>`,
+		`<strong>Operations</strong>`,
+		`type="checkbox"`,
+		`checked=""`,
 	)
 
 	fixture.personQueries.person.CompanyID = ""
@@ -404,7 +410,19 @@ func TestPersonPages(t *testing.T) {
 		`aria-controls="company_options"`,
 		`id="company_options"`,
 		`role="listbox"`,
+		`## Responsibilities`,
+		`- **Operations**`,
+		`- [x] Reporting`,
 	)
+
+	fixture.personQueries.person.Note = ""
+
+	response = fixture.get("/persons/101")
+	assertStatus(t, response, http.StatusOK)
+
+	if strings.Contains(response.Body.String(), `class="person-note"`) {
+		t.Fatal("person without note contains note section")
+	}
 
 	fixture.personQueries.err = contacts.ErrPersonNotFound
 	response = fixture.get("/persons/999")
@@ -490,6 +508,7 @@ func TestCreatePerson(t *testing.T) {
 		"position":     {"  Engineer  "},
 		"company_name": {"Northwind Logistics"},
 		"company_id":   {"7"},
+		"note":         {"## Responsibilities\n\n- Operations\n- Reporting"},
 	}
 
 	response := fixture.postForm("/persons", values)
@@ -502,6 +521,7 @@ func TestCreatePerson(t *testing.T) {
 		Name:      "  Anna Petrova  ",
 		Position:  "  Engineer  ",
 		CompanyID: common.ID(7),
+		Note:      "## Responsibilities\n\n- Operations\n- Reporting",
 	}
 	if fixture.personCommands.createInput != wantInput {
 		t.Fatalf(
@@ -591,6 +611,7 @@ func TestUpdatePerson(t *testing.T) {
 		"position":     {"  Director  "},
 		"company_name": {"Northwind Logistics"},
 		"company_id":   {"7"},
+		"note":         {"## Responsibilities\n\n- Operations\n- Reporting"},
 	}
 
 	response := fixture.postForm("/persons/101", values)
@@ -610,6 +631,7 @@ func TestUpdatePerson(t *testing.T) {
 		Name:      "  Anna Petrova  ",
 		Position:  "  Director  ",
 		CompanyID: common.ID(7),
+		Note:      "## Responsibilities\n\n- Operations\n- Reporting",
 	}
 	if fixture.personCommands.updateInput != wantInput {
 		t.Fatalf(
