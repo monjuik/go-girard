@@ -24,7 +24,13 @@ func main() {
 func run() error {
 	port := flag.Int("port", 8080, "HTTP server port")
 	dbPath := flag.String("db", "go-girard.db", "SQLite database path")
+	configPath := flag.String("config", "config.json", "Config path")
 	flag.Parse()
+
+	config, err := app.LoadConfig(*configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
 
 	ctx := context.Background()
 
@@ -48,6 +54,7 @@ func run() error {
 
 	server, err := app.NewServer(
 		*port,
+		config.Campaigns,
 		personQueries,
 		personCommands,
 		companyQueries,
@@ -60,7 +67,9 @@ func run() error {
 	slog.Info(
 		"starting web server",
 		"port", *port,
-		"database", *dbPath)
+		"database", *dbPath,
+		"campaigns", len(config.Campaigns),
+	)
 
 	if err := server.ListenAndServe(); err != nil {
 		return fmt.Errorf("serve HTTP: %w", err)

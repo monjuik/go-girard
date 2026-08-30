@@ -19,6 +19,30 @@ Joe Girard was an American salesman recognised by the Guinness Book of World Rec
 
 - Stores data about persons you are in touch. Name of a person should be unique. This is made on purpose. Better rename second John Smith in your app than confuse him by sending second welcome-message.
 
+## Running
+
+Optionally create a product configuration file:
+
+```bash
+cp config.example.json config.json
+```
+
+Run the application:
+
+`go run ./cmd/web`
+
+Available options:
+
+| Flag      | Default        | Description                     |
+|-----------|----------------|---------------------------------|
+| `-port`   | `8080`         | HTTP server port                |
+| `-db`     | `go-girard.db` | SQLite database path            |
+| `-config` | `config.json`  | Product configuration file path |
+
+If the configuration file does not exist, the application starts with an empty configuration.
+
+Use `go run ./cmd/web -help` to display the available options.
+
 ## How to use
 
 ### Markdown in the notes

@@ -15,16 +15,16 @@ coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
 # Go workspace file
 go.work
 go.work.sum
 
 # env file
 .env
+
+# App specific files
 /go-girard.db
 /go-girard.db-shm
 /go-girard.db-wal
 /main
+/config.json

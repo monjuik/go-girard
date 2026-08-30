@@ -1,0 +1,53 @@
+  {{define "campaign"}} {{template "layout_start" .}}
+
+  <header>
+      <h1>{{.Data.Campaign.Name}}</h1>
+  </header>
+
+  {{if .Data.Description}}
+  <section class="campaign-description">
+      {{.Data.Description}}
+  </section>
+  {{end}}
+
+  <dl class="grid">
+      <div>
+          <dt>Code</dt>
+          <dd><code>{{.Data.Campaign.Code}}</code></dd>
+      </div>
+
+      <div>
+          <dt>Version</dt>
+          <dd>{{.Data.Campaign.Version}}</dd>
+      </div>
+
+      <div>
+          <dt>Max active per company</dt>
+          <dd>
+              {{if .Data.Campaign.MaxActivePerCompany}}
+                  {{.Data.Campaign.MaxActivePerCompany}}
+              {{else}}
+                  &mdash;
+              {{end}}
+          </dd>
+      </div>
+  </dl>
+
+  <section>
+      <h2>Steps</h2>
+
+      <ol>
+          {{range .Data.Steps}}
+          <li>
+              <h3>{{.Step.Name}}</h3>
+              <p><code>{{.Step.Code}}</code></p>
+
+              {{if .Instructions}}
+              <div>{{.Instructions}}</div>
+              {{end}}
+          </li>
+          {{end}}
+      </ol>
+  </section>
+
+  {{template "layout_end" .}} {{end}}

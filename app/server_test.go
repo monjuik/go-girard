@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/monjuik/go-girard/campaigns"
 	"github.com/monjuik/go-girard/common"
 	"github.com/monjuik/go-girard/contacts"
 )
@@ -65,6 +66,7 @@ type recordingCompanyCommands struct {
 
 type serverFixture struct {
 	handler         http.Handler
+	campaigns       map[string]campaigns.Campaign
 	personQueries   *recordingPersonQueries
 	personCommands  *recordingPersonCommands
 	companyQueries  *recordingCompanyQueries
@@ -167,6 +169,7 @@ func newServerFixture(t *testing.T) *serverFixture {
 	t.Helper()
 
 	fixture := &serverFixture{
+		campaigns:       make(map[string]campaigns.Campaign),
 		personQueries:   &recordingPersonQueries{},
 		personCommands:  &recordingPersonCommands{},
 		companyQueries:  &recordingCompanyQueries{},
@@ -175,6 +178,7 @@ func newServerFixture(t *testing.T) *serverFixture {
 
 	server, err := NewServer(
 		0,
+		fixture.campaigns,
 		fixture.personQueries,
 		fixture.personCommands,
 		fixture.companyQueries,
@@ -1075,6 +1079,7 @@ func FuzzPersonFormEndpoints(f *testing.F) {
 	}
 	server, err := NewServer(
 		0,
+		nil,
 		&recordingPersonQueries{},
 		commands,
 		&recordingCompanyQueries{},
@@ -1227,4 +1232,112 @@ func TestCompaniesJSONSearch(t *testing.T) {
 	if body := response.Body.String(); body != wantBody {
 		t.Fatalf("response body = %q, want %q", body, wantBody)
 	}
+}
+
+func TestConfigPage(t *testing.T) {
+	fixture := newServerFixture(t)
+
+	for _, config := range []campaigns.CampaignConfig{
+		{
+			Code:    "followUp",
+			Name:    "Follow-up",
+			Version: 1,
+			Steps: []campaigns.StepConfig{
+				{Code: "contact", Name: "Contact"},
+			},
+		},
+		{
+			Code:    "businessDevelopment",
+			Name:    "Business development",
+			Version: 1,
+			Steps: []campaigns.StepConfig{
+				{Code: "discoverPlans", Name: "Discover plans"},
+			},
+		},
+	} {
+		campaign := newTestCampaign(t, config)
+		fixture.campaigns[campaign.Code()] = campaign
+	}
+
+	response := fixture.get("/config/")
+	assertStatus(t, response, http.StatusOK)
+
+	assertBodyContains(
+		t,
+		response,
+		"<h1>Campaigns</h1>",
+		`href="/config/campaigns/businessDevelopment"`,
+		`href="/config/campaigns/followUp"`,
+		`href="/config/"`,
+		`aria-current="page"`,
+	)
+
+	body := response.Body.String()
+	if strings.Index(body, "businessDevelopment") >
+		strings.Index(body, "followUp") {
+		t.Fatal("campaigns are not sorted by code")
+	}
+}
+
+func TestCampaignPage(t *testing.T) {
+	fixture := newServerFixture(t)
+
+	campaign := newTestCampaign(t, campaigns.CampaignConfig{
+		Code:        "followUp",
+		Name:        "Follow-up",
+		Version:     2,
+		Description: "Resume **earlier discussions**.",
+		EnrollmentPolicy: &campaigns.EnrollmentPolicyConfig{
+			MaxActivePerCompany: 1,
+		},
+		Steps: []campaigns.StepConfig{
+			{
+				Code:         "restoreContext",
+				Name:         "Restore context",
+				Instructions: "Review the *previous discussion*.",
+			},
+			{
+				Code: "agreeNextAction",
+				Name: "Agree next action",
+			},
+		},
+	})
+	fixture.campaigns[campaign.Code()] = campaign
+
+	response := fixture.get("/config/campaigns/followUp")
+	assertStatus(t, response, http.StatusOK)
+
+	assertBodyContains(
+		t,
+		response,
+		"<h1>Follow-up</h1>",
+		"<strong>earlier discussions</strong>",
+		"<em>previous discussion</em>",
+		"<code>followUp</code>",
+		"<code>restoreContext</code>",
+		"<code>agreeNextAction</code>",
+		"Max active per company",
+	)
+
+	body := response.Body.String()
+	if strings.Index(body, "restoreContext") >
+		strings.Index(body, "agreeNextAction") {
+		t.Fatal("campaign steps are not in configured order")
+	}
+
+	response = fixture.get("/config/campaigns/missing")
+	assertStatus(t, response, http.StatusNotFound)
+}
+
+func newTestCampaign(
+	t *testing.T,
+	config campaigns.CampaignConfig,
+) campaigns.Campaign {
+	t.Helper()
+
+	campaign, err := campaigns.NewCampaign(config)
+	if err != nil {
+		t.Fatalf("NewCampaign() error = %v", err)
+	}
+	return campaign
 }

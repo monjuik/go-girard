@@ -7,9 +7,11 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/monjuik/go-girard/campaigns"
 	"github.com/monjuik/go-girard/common"
 	"github.com/monjuik/go-girard/contacts"
 )
@@ -72,7 +74,23 @@ type CompanyFormData struct {
 	NameError   string
 }
 
+type CampaignsPageData struct {
+	Campaigns []campaigns.CampaignRowView
+}
+
+type CampaignPageData struct {
+	Campaign    campaigns.Campaign
+	Description template.HTML
+	Steps       []CampaignStepPageData
+}
+
+type CampaignStepPageData struct {
+	Step         campaigns.Step
+	Instructions template.HTML
+}
+
 type Server struct {
+	campaigns       map[string]campaigns.Campaign
 	personQueries   contacts.PersonQueries
 	personCommands  contacts.PersonCommands
 	companyQueries  contacts.CompanyQueries
@@ -83,6 +101,7 @@ type Server struct {
 
 func NewServer(
 	port int,
+	campaigns map[string]campaigns.Campaign,
 	personQueries contacts.PersonQueries,
 	personCommands contacts.PersonCommands,
 	companyQueries contacts.CompanyQueries,
@@ -93,6 +112,7 @@ func NewServer(
 		return nil, err
 	}
 	server := &Server{
+		campaigns:       campaigns,
 		personQueries:   personQueries,
 		personCommands:  personCommands,
 		companyQueries:  companyQueries,
@@ -108,6 +128,8 @@ func NewServer(
 	mux.HandleFunc("GET /companies/new", server.handleNewCompany)
 	mux.HandleFunc("GET /companies/{id}", server.handleCompany)
 	mux.HandleFunc("GET /companies/{id}/edit", server.handleEditCompany)
+	mux.HandleFunc("GET /config/{$}", server.handleConfig)
+	mux.HandleFunc("GET /config/campaigns/{code}", server.handleCampaign)
 	mux.HandleFunc("POST /companies", server.handleCreateCompany)
 	mux.HandleFunc("POST /companies/{id}", server.handleUpdateCompany)
 	mux.HandleFunc("POST /companies/{id}/delete", server.handleDeleteCompany)
@@ -499,6 +521,64 @@ func (s *Server) handleCompany(w http.ResponseWriter, r *http.Request) {
 		Data: CompanyPageData{
 			Company: company,
 			Saved:   r.URL.Query().Get("saved") == "1",
+		},
+	})
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	rows := make([]campaigns.CampaignRowView, 0, len(s.campaigns))
+
+	for _, c := range s.campaigns {
+		rows = append(rows, campaigns.CampaignRowView{
+			Code: c.Code(),
+			Name: c.Name(),
+		})
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].Code < rows[j].Code
+	})
+
+	s.templates.Render(w, "config", PageData{
+		Title:      "Configuration",
+		ActiveMenu: "config",
+		Data:       CampaignsPageData{Campaigns: rows},
+	})
+}
+
+func (s *Server) handleCampaign(w http.ResponseWriter, r *http.Request) {
+	campaign, exists := s.campaigns[r.PathValue("code")]
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	description, err := renderMarkdown(campaign.Description())
+	if err != nil {
+		description = "<p>Error: markdown engine failed to render campaign description</p>"
+	}
+
+	campaignSteps := campaign.Steps()
+	steps := make([]CampaignStepPageData, 0, len(campaignSteps))
+	for _, step := range campaignSteps {
+		instructions, err := renderMarkdown(step.Instructions())
+		if err != nil {
+			instructions = "<p>Error: markdown engine failed to render step instructions</p>"
+		}
+
+		steps = append(steps, CampaignStepPageData{
+			Step:         step,
+			Instructions: instructions,
+		})
+	}
+
+	s.templates.Render(w, "campaign", PageData{
+		Title:      campaign.Name(),
+		ActiveMenu: "config",
+		Data: CampaignPageData{
+			Campaign:    campaign,
+			Description: description,
+			Steps:       steps,
 		},
 	})
 }

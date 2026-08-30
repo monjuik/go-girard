@@ -1,0 +1,30 @@
+ {
+    "campaigns": [
+      {
+        "code": "followUp",
+        "name": "Follow-up",
+        "version": 1,
+        "description": "Resume an earlier discussion after a pause.",
+        "enrollmentPolicy": {
+          "maxActivePerCompany": 1
+        },
+        "steps": [
+          {
+            "code": "restoreContext",
+            "name": "Restore context",
+            "instructions": "Review the previous discussion, demo, and proposals."
+          },
+          {
+            "code": "discoverChanges",
+            "name": "Discover changes",
+            "instructions": "Ask what has changed since the previous conversation."
+          },
+          {
+            "code": "agreeNextAction",
+            "name": "Agree next action",
+            "instructions": "Agree on a concrete next action and date."
+          }
+        ]
+      }
+    ]
+  }

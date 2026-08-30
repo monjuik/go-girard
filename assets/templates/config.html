@@ -1,0 +1,35 @@
+ {{define "config"}} {{template "layout_start" .}}
+
+  <header>
+      <hgroup>
+          <h1>Campaigns</h1>
+          <p>Configured campaigns.</p>
+      </hgroup>
+  </header>
+
+  <figure>
+      <table class="striped">
+          <thead>
+              <tr>
+                  <th>Code</th>
+                  <th>Name</th>
+              </tr>
+          </thead>
+          <tbody>
+              {{range .Data.Campaigns}}
+              <tr>
+                  <td><code>{{.Code}}</code></td>
+                  <td>
+                      <a href="/config/campaigns/{{.Code}}">{{.Name}}</a>
+                  </td>
+              </tr>
+              {{else}}
+              <tr>
+                  <td colspan="2">No campaigns configured.</td>
+              </tr>
+              {{end}}
+          </tbody>
+      </table>
+  </figure>
+
+  {{template "layout_end" .}} {{end}}
