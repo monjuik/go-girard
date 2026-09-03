@@ -152,6 +152,14 @@
                     <ul>
                         <li>
                             <a
+                                href="/"
+                                {{if eq .ActiveMenu "dashboard"}}aria-current="page"{{end}}
+                            >
+                                Dashboard
+                            </a>
+                        </li>
+                        <li>
+                            <a
                                 href="/persons"
                                 {{if eq .ActiveMenu "persons"}}aria-current="page"{{end}}
                             >

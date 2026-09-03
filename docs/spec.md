@@ -53,10 +53,9 @@ VALUES (101, 'Anna Petrova', 'Head of Operations', 1);
 
 - Person. Name, birthday, photo, position, company, contacts, note, audit
 - Company. Name, country, audit
-- Campaign. Playbook with instructions. Code, name, version, type, enrollment limiters, steps, instructions:
+- Campaign. Playbook with instructions. Code, name, version, type, steps, instructions:
   - Types: finite, recurring
   - Recurrence: anchor = person.birthday, interval = (years = 1)
-  - Enrollment limiter: by = person.company count = 1
   - Steps are ordered and describe the intention for the given stage
 - Enrollment. Represents a person's participation in a campaign. Current state, next action, intention:
   - States: active, completed, stopped
@@ -120,3 +119,10 @@ go-girard/
 ├── go.mod
 └── README.md
 ```
+
+
+## TODO
+
+- [ ] company page: markdown note
+- [ ] company page: a list of persons
+- [ ] graceful shutdown of the db files after getting sigkill

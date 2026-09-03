@@ -8,25 +8,23 @@ import (
 )
 
 var (
-	ErrCampaignCodeInvalid     = errors.New("campaign code is invalid")
-	ErrCampaignNameRequired    = errors.New("campaign name is required")
-	ErrCampaignVersionInvalid  = errors.New("campaign version is invalid")
-	ErrCampaignStepsRequired   = errors.New("campaign steps are required")
-	ErrStepCodeInvalid         = errors.New("step code is invalid")
-	ErrStepCodeDuplicate       = errors.New("step code is duplicated")
-	ErrStepNameRequired        = errors.New("step name is required")
-	ErrEnrollmentPolicyInvalid = errors.New("enrollment policy is invalid")
+	ErrCampaignCodeInvalid    = errors.New("campaign code is invalid")
+	ErrCampaignNameRequired   = errors.New("campaign name is required")
+	ErrCampaignVersionInvalid = errors.New("campaign version is invalid")
+	ErrCampaignStepsRequired  = errors.New("campaign steps are required")
+	ErrStepCodeInvalid        = errors.New("step code is invalid")
+	ErrStepCodeDuplicate      = errors.New("step code is duplicated")
+	ErrStepNameRequired       = errors.New("step name is required")
 )
 
 var codePattern = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 
 type Campaign struct {
-	code                string
-	name                string
-	version             int
-	description         string
-	maxActivePerCompany int
-	steps               []Step
+	code        string
+	name        string
+	version     int
+	description string
+	steps       []Step
 }
 
 type Step struct {
@@ -36,16 +34,11 @@ type Step struct {
 }
 
 type CampaignConfig struct {
-	Code             string                  `json:"code"`
-	Name             string                  `json:"name"`
-	Version          int                     `json:"version"`
-	Description      string                  `json:"description,omitempty"`
-	EnrollmentPolicy *EnrollmentPolicyConfig `json:"enrollmentPolicy,omitempty"`
-	Steps            []StepConfig            `json:"steps"`
-}
-
-type EnrollmentPolicyConfig struct {
-	MaxActivePerCompany int `json:"maxActivePerCompany"`
+	Code        string       `json:"code"`
+	Name        string       `json:"name"`
+	Version     int          `json:"version"`
+	Description string       `json:"description,omitempty"`
+	Steps       []StepConfig `json:"steps"`
 }
 
 type StepConfig struct {
@@ -77,14 +70,6 @@ func NewCampaign(config CampaignConfig) (Campaign, error) {
 		return Campaign{}, ErrCampaignStepsRequired
 	}
 
-	maxActivePerCompany := 0
-	if config.EnrollmentPolicy != nil {
-		maxActivePerCompany = config.EnrollmentPolicy.MaxActivePerCompany
-		if maxActivePerCompany < 1 {
-			return Campaign{}, ErrEnrollmentPolicyInvalid
-		}
-	}
-
 	steps := make([]Step, 0, len(config.Steps))
 	stepCodes := make(map[string]struct{}, len(config.Steps))
 
@@ -110,12 +95,11 @@ func NewCampaign(config CampaignConfig) (Campaign, error) {
 	}
 
 	return Campaign{
-		code:                config.Code,
-		name:                name,
-		version:             config.Version,
-		description:         config.Description,
-		maxActivePerCompany: maxActivePerCompany,
-		steps:               steps,
+		code:        config.Code,
+		name:        name,
+		version:     config.Version,
+		description: config.Description,
+		steps:       steps,
 	}, nil
 }
 
@@ -133,10 +117,6 @@ func (c Campaign) Version() int {
 
 func (c Campaign) Description() string {
 	return c.description
-}
-
-func (c Campaign) MaxActivePerCompany() int {
-	return c.maxActivePerCompany
 }
 
 func (c Campaign) Steps() []Step {

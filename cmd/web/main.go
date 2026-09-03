@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/monjuik/go-girard/app"
+	"github.com/monjuik/go-girard/campaigns"
 	"github.com/monjuik/go-girard/contacts"
 )
 
@@ -52,6 +53,10 @@ func run() error {
 	companyRepository := contacts.NewSQLiteCompanyRepository(db)
 	companyCommands := contacts.NewCompanyService(companyRepository)
 
+	enrollmentQueries := campaigns.NewSQLiteEnrollmentQueries(db)
+	enrollmentRepository := campaigns.NewSQLiteEnrollmentRepository(db)
+	enrollmentCommands := campaigns.NewEnrollmentService(enrollmentRepository, config.Campaigns)
+
 	server, err := app.NewServer(
 		*port,
 		config.Campaigns,
@@ -59,6 +64,8 @@ func run() error {
 		personCommands,
 		companyQueries,
 		companyCommands,
+		enrollmentQueries,
+		enrollmentCommands,
 	)
 	if err != nil {
 		return fmt.Errorf("create server: %w", err)

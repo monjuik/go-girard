@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monjuik/go-girard/campaigns"
 	"github.com/monjuik/go-girard/common"
@@ -17,9 +18,10 @@ import (
 )
 
 const (
-	rowsPerPage            = 20
-	maxPersonFormBodySize  = 64 << 10
-	maxCompanyFormBodySize = 64 << 10
+	rowsPerPage               = 20
+	maxPersonFormBodySize     = 64 << 10
+	maxCompanyFormBodySize    = 64 << 10
+	maxEnrollmentFormBodySize = 8 << 10
 )
 
 type PersonsPageData struct {
@@ -29,11 +31,40 @@ type PersonsPageData struct {
 	NextURL     string
 }
 
+type DashboardPageData struct {
+	Enrollments []DashboardEnrollmentPageData
+}
+
+type DashboardEnrollmentPageData struct {
+	PersonID   string
+	PersonName string
+	Campaign   string
+	Next       string
+}
+
 // PersonPageData contains data for the read-only person page.
 type PersonPageData struct {
-	Person contacts.PersonView
-	Note   template.HTML
-	Saved  bool
+	Person             contacts.PersonView
+	Enrollments        []PersonEnrollmentPageData
+	AvailableCampaigns []campaigns.CampaignRowView
+	Note               template.HTML
+	Saved              bool
+	Enrolled           bool
+	Postponed          bool
+	Moved              bool
+	Completed          bool
+	Stopped            bool
+}
+
+type PersonEnrollmentPageData struct {
+	ID           string
+	CampaignCode string
+	CampaignName string
+	Status       string
+	Next         string
+	Intention    string
+	Active       bool
+	MoveSteps    []campaigns.Step
 }
 
 // PersonFormData contains data for the create and edit form.
@@ -82,6 +113,7 @@ type CampaignPageData struct {
 	Campaign    campaigns.Campaign
 	Description template.HTML
 	Steps       []CampaignStepPageData
+	Persons     []CampaignPersonPageData
 }
 
 type CampaignStepPageData struct {
@@ -89,14 +121,25 @@ type CampaignStepPageData struct {
 	Instructions template.HTML
 }
 
+type CampaignPersonPageData struct {
+	PersonID   string
+	PersonName string
+	CompanyID  string
+	Company    string
+	Status     string
+}
+
 type Server struct {
-	campaigns       map[string]campaigns.Campaign
-	personQueries   contacts.PersonQueries
-	personCommands  contacts.PersonCommands
-	companyQueries  contacts.CompanyQueries
-	companyCommands contacts.CompanyCommands
-	templates       *Templates
-	httpServer      *http.Server
+	campaigns          map[string]campaigns.Campaign
+	personQueries      contacts.PersonQueries
+	personCommands     contacts.PersonCommands
+	companyQueries     contacts.CompanyQueries
+	companyCommands    contacts.CompanyCommands
+	enrollmentQueries  campaigns.EnrollmentQueries
+	enrollmentCommands campaigns.EnrollmentCommands
+	today              func() common.Date
+	templates          *Templates
+	httpServer         *http.Server
 }
 
 func NewServer(
@@ -106,20 +149,28 @@ func NewServer(
 	personCommands contacts.PersonCommands,
 	companyQueries contacts.CompanyQueries,
 	companyCommands contacts.CompanyCommands,
+	enrollmentQueries campaigns.EnrollmentQueries,
+	enrollmentCommands campaigns.EnrollmentCommands,
 ) (*Server, error) {
 	templates, err := NewTemplates()
 	if err != nil {
 		return nil, err
 	}
 	server := &Server{
-		campaigns:       campaigns,
-		personQueries:   personQueries,
-		personCommands:  personCommands,
-		companyQueries:  companyQueries,
-		companyCommands: companyCommands,
-		templates:       templates,
+		campaigns:          campaigns,
+		personQueries:      personQueries,
+		personCommands:     personCommands,
+		companyQueries:     companyQueries,
+		companyCommands:    companyCommands,
+		enrollmentQueries:  enrollmentQueries,
+		enrollmentCommands: enrollmentCommands,
+		today: func() common.Date {
+			return common.DateFromTime(time.Now())
+		},
+		templates: templates,
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", server.handleDashboard)
 	mux.HandleFunc("GET /persons", server.handlePersons)
 	mux.HandleFunc("GET /persons/new", server.handleNewPerson)
 	mux.HandleFunc("GET /persons/{id}", server.handlePerson)
@@ -136,6 +187,23 @@ func NewServer(
 	mux.HandleFunc("POST /persons", server.handleCreatePerson)
 	mux.HandleFunc("POST /persons/{id}", server.handleUpdatePerson)
 	mux.HandleFunc("POST /persons/{id}/delete", server.handleDeletePerson)
+	mux.HandleFunc("POST /persons/{id}/enrollments", server.handleEnrollPerson)
+	mux.HandleFunc(
+		"POST /persons/{id}/enrollments/{enrollmentID}/postpone",
+		server.handlePostponeEnrollment,
+	)
+	mux.HandleFunc(
+		"POST /persons/{id}/enrollments/{enrollmentID}/move",
+		server.handleMoveEnrollment,
+	)
+	mux.HandleFunc(
+		"POST /persons/{id}/enrollments/{enrollmentID}/complete",
+		server.handleCompleteEnrollment,
+	)
+	mux.HandleFunc(
+		"POST /persons/{id}/enrollments/{enrollmentID}/stop",
+		server.handleStopEnrollment,
+	)
 	addr := fmt.Sprintf(":%d", port)
 	protection := http.NewCrossOriginProtection()
 	server.httpServer = &http.Server{
@@ -151,6 +219,40 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) Addr() string {
 	return s.httpServer.Addr
+}
+
+func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.enrollmentQueries.ListDueEnrollments(
+		r.Context(),
+		s.today(),
+	)
+	if err != nil {
+		http.Error(w, "failed to list due enrollments", http.StatusInternalServerError)
+		return
+	}
+
+	enrollments := make([]DashboardEnrollmentPageData, 0, len(rows))
+	for _, row := range rows {
+		campaignName := row.Campaign
+		if campaign, exists := s.campaigns[row.Campaign]; exists {
+			campaignName = campaign.Name()
+		}
+
+		enrollments = append(enrollments, DashboardEnrollmentPageData{
+			PersonID:   row.PersonID,
+			PersonName: row.PersonName,
+			Campaign:   campaignName,
+			Next:       row.Next.String(),
+		})
+	}
+
+	s.templates.Render(w, "dashboard", PageData{
+		Title:      "Dashboard",
+		ActiveMenu: "dashboard",
+		Data: DashboardPageData{
+			Enrollments: enrollments,
+		},
+	})
 }
 
 func (s *Server) handlePersons(w http.ResponseWriter, r *http.Request) {
@@ -219,6 +321,32 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	personID, err := common.IDFromString(person.ID)
+	if err != nil {
+		http.Error(
+			w,
+			"failed to get person enrollments",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	enrollmentRows, err := s.enrollmentQueries.ListPersonEnrollments(
+		r.Context(),
+		personID,
+	)
+	if err != nil {
+		http.Error(
+			w,
+			"failed to list person enrollments",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	enrollments := s.personEnrollmentPageData(enrollmentRows)
+	availableCampaigns := s.availableCampaigns(enrollmentRows)
+
 	noteHTML, err := renderMarkdown(person.Note)
 	if err != nil {
 		noteHTML = "<p>Error: markdown engine failed to render person note</p>"
@@ -228,11 +356,281 @@ func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
 		Title:      person.Name,
 		ActiveMenu: "persons",
 		Data: PersonPageData{
-			Person: person,
-			Note:   noteHTML,
-			Saved:  r.URL.Query().Get("saved") == "1",
+			Person:             person,
+			Enrollments:        enrollments,
+			AvailableCampaigns: availableCampaigns,
+			Note:               noteHTML,
+			Saved:              r.URL.Query().Get("saved") == "1",
+			Enrolled:           r.URL.Query().Get("enrolled") == "1",
+			Postponed:          r.URL.Query().Get("postponed") == "1",
+			Moved:              r.URL.Query().Get("moved") == "1",
+			Completed:          r.URL.Query().Get("completed") == "1",
+			Stopped:            r.URL.Query().Get("stopped") == "1",
 		},
 	})
+}
+
+func (s *Server) handleEnrollPerson(w http.ResponseWriter, r *http.Request) {
+	person, ok := s.loadPerson(w, r)
+	if !ok {
+		return
+	}
+
+	personID, err := common.IDFromString(person.ID)
+	if err != nil {
+		http.Error(w, "failed to enroll person", http.StatusInternalServerError)
+		return
+	}
+
+	if err := parseEnrollmentForm(w, r); err != nil {
+		writeEnrollmentFormError(w, err)
+		return
+	}
+
+	campaignCode := r.PostForm.Get("campaign")
+	_, err = s.enrollmentCommands.Enroll(
+		r.Context(),
+		personID,
+		campaignCode,
+	)
+	switch {
+	case errors.Is(err, campaigns.ErrCampaignNotFound):
+		http.Error(w, "select a configured campaign", http.StatusUnprocessableEntity)
+		return
+	case errors.Is(err, campaigns.ErrEnrollmentExists):
+		http.Error(w, "person is already enrolled in this campaign", http.StatusUnprocessableEntity)
+		return
+	case errors.Is(err, campaigns.ErrEnrollmentPersonNotFound):
+		http.NotFound(w, r)
+		return
+	case err != nil:
+		http.Error(w, "failed to enroll person", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(
+		w,
+		r,
+		"/persons/"+person.ID+"?enrolled=1",
+		http.StatusSeeOther,
+	)
+}
+
+func (s *Server) handlePostponeEnrollment(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	person, ok := s.loadPerson(w, r)
+	if !ok {
+		return
+	}
+
+	personID, err := common.IDFromString(person.ID)
+	if err != nil {
+		http.Error(w, "failed to postpone enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	enrollmentID, err := common.IDFromString(r.PathValue("enrollmentID"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if err := parseEnrollmentForm(w, r); err != nil {
+		writeEnrollmentFormError(w, err)
+		return
+	}
+
+	next, err := common.ParseDate(r.PostForm.Get("next"))
+	if err != nil {
+		http.Error(w, "select a valid date", http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = s.enrollmentCommands.Postpone(
+		r.Context(),
+		personID,
+		enrollmentID,
+		next,
+	)
+	switch {
+	case errors.Is(err, campaigns.ErrEnrollmentNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.Is(err, campaigns.ErrEnrollmentNextInvalid),
+		errors.Is(err, campaigns.ErrEnrollmentDateNotFuture),
+		errors.Is(err, campaigns.ErrEnrollmentInactive):
+		http.Error(
+			w,
+			"select a future date for an active enrollment",
+			http.StatusUnprocessableEntity,
+		)
+		return
+	case err != nil:
+		http.Error(w, "failed to postpone enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(
+		w,
+		r,
+		"/persons/"+person.ID+"?postponed=1",
+		http.StatusSeeOther,
+	)
+}
+
+func (s *Server) handleMoveEnrollment(w http.ResponseWriter, r *http.Request) {
+	person, ok := s.loadPerson(w, r)
+	if !ok {
+		return
+	}
+
+	personID, err := common.IDFromString(person.ID)
+	if err != nil {
+		http.Error(w, "failed to move enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	enrollmentID, err := common.IDFromString(r.PathValue("enrollmentID"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if err := parseEnrollmentForm(w, r); err != nil {
+		writeEnrollmentFormError(w, err)
+		return
+	}
+
+	next, err := common.ParseDate(r.PostForm.Get("next"))
+	if err != nil {
+		http.Error(w, "select a valid date", http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = s.enrollmentCommands.Move(
+		r.Context(),
+		personID,
+		enrollmentID,
+		r.PostForm.Get("step"),
+		next,
+		r.PostForm.Get("intention"),
+	)
+	switch {
+	case errors.Is(err, campaigns.ErrEnrollmentNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.Is(err, campaigns.ErrCampaignNotFound),
+		errors.Is(err, campaigns.ErrEnrollmentStepInvalid),
+		errors.Is(err, campaigns.ErrEnrollmentStepUnchanged),
+		errors.Is(err, campaigns.ErrEnrollmentNextInvalid),
+		errors.Is(err, campaigns.ErrEnrollmentDateNotFuture),
+		errors.Is(err, campaigns.ErrEnrollmentIntentionRequired),
+		errors.Is(err, campaigns.ErrEnrollmentInactive):
+		http.Error(
+			w,
+			"select a different configured step, a future date, and an intention",
+			http.StatusUnprocessableEntity,
+		)
+		return
+	case err != nil:
+		http.Error(w, "failed to move enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(
+		w,
+		r,
+		"/persons/"+person.ID+"?moved=1",
+		http.StatusSeeOther,
+	)
+}
+
+func (s *Server) handleStopEnrollment(w http.ResponseWriter, r *http.Request) {
+	person, ok := s.loadPerson(w, r)
+	if !ok {
+		return
+	}
+
+	personID, err := common.IDFromString(person.ID)
+	if err != nil {
+		http.Error(w, "failed to stop enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	enrollmentID, err := common.IDFromString(r.PathValue("enrollmentID"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	err = s.enrollmentCommands.Stop(
+		r.Context(),
+		personID,
+		enrollmentID,
+	)
+	switch {
+	case errors.Is(err, campaigns.ErrEnrollmentNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.Is(err, campaigns.ErrEnrollmentInactive):
+		http.Error(w, "enrollment is not active", http.StatusUnprocessableEntity)
+		return
+	case err != nil:
+		http.Error(w, "failed to stop enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(
+		w,
+		r,
+		"/persons/"+person.ID+"?stopped=1",
+		http.StatusSeeOther,
+	)
+}
+
+func (s *Server) handleCompleteEnrollment(w http.ResponseWriter, r *http.Request) {
+	person, ok := s.loadPerson(w, r)
+	if !ok {
+		return
+	}
+
+	personID, err := common.IDFromString(person.ID)
+	if err != nil {
+		http.Error(w, "failed to complete enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	enrollmentID, err := common.IDFromString(r.PathValue("enrollmentID"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	err = s.enrollmentCommands.Complete(
+		r.Context(),
+		personID,
+		enrollmentID,
+	)
+	switch {
+	case errors.Is(err, campaigns.ErrEnrollmentNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.Is(err, campaigns.ErrEnrollmentInactive):
+		http.Error(w, "enrollment is not active", http.StatusUnprocessableEntity)
+		return
+	case err != nil:
+		http.Error(w, "failed to complete enrollment", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(
+		w,
+		r,
+		"/persons/"+person.ID+"?completed=1",
+		http.StatusSeeOther,
+	)
 }
 
 func (s *Server) handleEditPerson(w http.ResponseWriter, r *http.Request) {
@@ -553,6 +951,26 @@ func (s *Server) handleCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	personRows, err := s.enrollmentQueries.ListCampaignPersons(
+		r.Context(),
+		campaign.Code(),
+	)
+	if err != nil {
+		http.Error(w, "failed to list campaign persons", http.StatusInternalServerError)
+		return
+	}
+
+	persons := make([]CampaignPersonPageData, 0, len(personRows))
+	for _, row := range personRows {
+		persons = append(persons, CampaignPersonPageData{
+			PersonID:   row.PersonID,
+			PersonName: row.PersonName,
+			CompanyID:  row.CompanyID,
+			Company:    row.Company,
+			Status:     enrollmentStateLabel(row.State),
+		})
+	}
+
 	description, err := renderMarkdown(campaign.Description())
 	if err != nil {
 		description = "<p>Error: markdown engine failed to render campaign description</p>"
@@ -579,6 +997,7 @@ func (s *Server) handleCampaign(w http.ResponseWriter, r *http.Request) {
 			Campaign:    campaign,
 			Description: description,
 			Steps:       steps,
+			Persons:     persons,
 		},
 	})
 }
@@ -838,6 +1257,24 @@ func writePersonFormError(w http.ResponseWriter, err error) {
 	http.Error(w, "invalid form", http.StatusBadRequest)
 }
 
+func writeEnrollmentFormError(w http.ResponseWriter, err error) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+		http.Error(
+			w,
+			"request body too large",
+			http.StatusRequestEntityTooLarge,
+		)
+		return
+	}
+
+	http.Error(w, "invalid form", http.StatusBadRequest)
+}
+
+func parseEnrollmentForm(w http.ResponseWriter, r *http.Request) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxEnrollmentFormBodySize)
+	return r.ParseForm()
+}
+
 func (s *Server) loadPerson(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -922,4 +1359,89 @@ func personCompanySelectionError(input contacts.PersonInput, companyName string)
 		return "Select a company from the list or clear the field"
 	}
 	return ""
+}
+
+func (s *Server) personEnrollmentPageData(
+	rows []campaigns.PersonEnrollmentRowView,
+) []PersonEnrollmentPageData {
+	result := make([]PersonEnrollmentPageData, 0, len(rows))
+
+	for _, row := range rows {
+		campaignName := row.Campaign
+		var moveSteps []campaigns.Step
+
+		if campaign, exists := s.campaigns[row.Campaign]; exists {
+			campaignName = campaign.Name()
+
+			for _, step := range campaign.Steps() {
+				if step.Code() != row.Step &&
+					row.State == campaigns.EnrollmentActive {
+					moveSteps = append(moveSteps, step)
+				}
+			}
+		}
+
+		result = append(result, PersonEnrollmentPageData{
+			ID:           row.ID,
+			CampaignCode: row.Campaign,
+			CampaignName: campaignName,
+			Status:       enrollmentStateLabel(row.State),
+			Next:         row.Next.String(),
+			Intention:    row.Intention,
+			Active:       row.State == campaigns.EnrollmentActive,
+			MoveSteps:    moveSteps,
+		})
+	}
+
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].CampaignName == result[j].CampaignName {
+			return result[i].ID < result[j].ID
+		}
+		return result[i].CampaignName < result[j].CampaignName
+	})
+
+	return result
+}
+
+func (s *Server) availableCampaigns(
+	rows []campaigns.PersonEnrollmentRowView,
+) []campaigns.CampaignRowView {
+	enrolled := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		enrolled[row.Campaign] = struct{}{}
+	}
+
+	result := make([]campaigns.CampaignRowView, 0, len(s.campaigns))
+	for code, campaign := range s.campaigns {
+		if _, exists := enrolled[code]; exists {
+			continue
+		}
+
+		result = append(result, campaigns.CampaignRowView{
+			Code: code,
+			Name: campaign.Name(),
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Name == result[j].Name {
+			return result[i].Code < result[j].Code
+		}
+		return result[i].Name < result[j].Name
+	})
+
+	return result
+}
+
+func enrollmentStateLabel(state campaigns.EnrollmentState) string {
+	switch state {
+	case campaigns.EnrollmentActive:
+		return "Active"
+	case campaigns.EnrollmentCompleted:
+		return "Completed"
+	case campaigns.EnrollmentStopped:
+		return "Stopped"
+	default:
+		return string(state)
+	}
 }

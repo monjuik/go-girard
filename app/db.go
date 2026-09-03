@@ -161,4 +161,46 @@ var migrations = []migration{
 			ADD COLUMN note TEXT NOT NULL DEFAULT '';
 		`,
 	},
+	{
+		name: "003_enrollment",
+		sql: `
+			CREATE TABLE enrollment (
+				id        INTEGER PRIMARY KEY,
+				campaign  TEXT NOT NULL
+					CHECK (length(campaign) > 0),
+				step      TEXT NOT NULL
+					CHECK (length(step) > 0),
+				person    INTEGER NOT NULL REFERENCES person(id),
+				state     TEXT NOT NULL
+					CHECK (state IN ('active', 'completed', 'stopped')),
+				next      TEXT
+					CHECK (
+						next IS NULL
+						OR (
+							length(next) = 10
+							AND date(next) IS NOT NULL
+							AND date(next) = next
+						)
+					),
+				intention TEXT NOT NULL
+					CHECK (length(trim(intention)) > 0),
+
+				UNIQUE (campaign, person),
+
+				CHECK (
+					(state = 'active' AND next IS NOT NULL)
+					OR (
+						state IN ('completed', 'stopped')
+						AND next IS NULL
+					)
+				)
+			);
+
+			CREATE INDEX enrollment_person
+			ON enrollment (person);
+
+			CREATE INDEX enrollment_due
+			ON enrollment (state, next);
+		`,
+	},
 }

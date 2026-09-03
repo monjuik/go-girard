@@ -5,9 +5,6 @@
         "name": "Follow-up",
         "version": 1,
         "description": "Resume an earlier discussion after a pause.",
-        "enrollmentPolicy": {
-          "maxActivePerCompany": 1
-        },
         "steps": [
           {
             "code": "restoreContext",

@@ -10,6 +10,26 @@
   <article role="status">Person saved.</article>
   {{end}}
 
+  {{if .Data.Enrolled}}
+  <article role="status">Person enrolled in campaign.</article>
+  {{end}}
+
+  {{if .Data.Postponed}}
+  <article role="status">Action postponed.</article>
+  {{end}}
+
+  {{if .Data.Moved}}
+  <article role="status">Enrollment moved.</article>
+  {{end}}
+
+  {{if .Data.Completed}}
+  <article role="status">Enrollment completed.</article>
+  {{end}}
+
+  {{if .Data.Stopped}}
+  <article role="status">Enrollment stopped.</article>
+  {{end}}
+
   <dl class="grid">
       <div>
           <dt>Position</dt>
@@ -36,6 +56,201 @@
       </div>
   </dl>
 
+  <hr />
+
+  <section>
+      <h2>Campaigns</h2>
+
+      <figure>
+          <table class="striped">
+              <thead>
+                  <tr>
+                      <th>Campaign</th>
+                      <th>Status</th>
+                      <th>Next action</th>
+                      <th>Intention</th>
+                      <th>Actions</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {{range .Data.Enrollments}}
+                  <tr>
+                      <td>{{.CampaignName}}</td>
+                      <td>{{.Status}}</td>
+                      <td>
+                          {{if .Next}}
+                              <time datetime="{{.Next}}">{{.Next}}</time>
+                          {{else}}
+                              &mdash;
+                          {{end}}
+                      </td>
+                      <td>{{.Intention}}</td>
+                      <td class="actions">
+                          {{if .Active}}
+                          <button
+                              type="button"
+                              class="secondary outline"
+                              onclick="document.getElementById('postpone_dialog_{{.ID}}').showModal()"
+                          >
+                              Postpone…
+                          </button>
+
+                          <dialog id="postpone_dialog_{{.ID}}">
+                              <article>
+                                  <header>
+                                      <button
+                                          type="button"
+                                          aria-label="Close"
+                                          rel="prev"
+                                          onclick="document.getElementById('postpone_dialog_{{.ID}}').close()"
+                                      ></button>
+                                      <h2>Postpone action</h2>
+                                  </header>
+
+                                  <form
+                                      method="post"
+                                      action="/persons/{{$.Data.Person.ID}}/enrollments/{{.ID}}/postpone"
+                                  >
+                                      <label>
+                                          Next action date
+                                          <input
+                                              type="date"
+                                              name="next"
+                                              required
+                                          />
+                                      </label>
+
+                                      <footer class="actions">
+                                          <button
+                                              type="button"
+                                              class="secondary"
+                                              onclick="document.getElementById('postpone_dialog_{{.ID}}').close()"
+                                          >
+                                              Cancel
+                                          </button>
+                                          <button type="submit">
+                                              Postpone
+                                          </button>
+                                      </footer>
+                                  </form>
+                              </article>
+                          </dialog>
+
+                          {{if .MoveSteps}}
+                          <button
+                              type="button"
+                              class="secondary outline"
+                              onclick="document.getElementById('move_dialog_{{.ID}}').showModal()"
+                          >
+                              Move…
+                          </button>
+
+                          <dialog id="move_dialog_{{.ID}}">
+                              <article>
+                                  <header>
+                                      <button
+                                          type="button"
+                                          aria-label="Close"
+                                          rel="prev"
+                                          onclick="document.getElementById('move_dialog_{{.ID}}').close()"
+                                      ></button>
+                                      <h2>Move enrollment</h2>
+                                  </header>
+
+                                  <form
+                                      method="post"
+                                      action="/persons/{{$.Data.Person.ID}}/enrollments/{{.ID}}/move"
+                                  >
+                                      <label>
+                                          Step
+                                          <select
+                                              name="step"
+                                              required
+                                              onchange="this.form.elements.intention.value = this.selectedOptions[0].dataset.intention"
+                                          >
+                                              <option value="" disabled selected>
+                                                  Select step
+                                              </option>
+                                              {{range .MoveSteps}}
+                                              <option
+                                                  value="{{.Code}}"
+                                                  data-intention="{{.Name}}"
+                                              >
+                                                  {{.Name}}
+                                              </option>
+                                              {{end}}
+                                          </select>
+                                      </label>
+
+                                      <label>
+                                          Next action date
+                                          <input
+                                              type="date"
+                                              name="next"
+                                              required
+                                          />
+                                      </label>
+
+                                      <label>
+                                          Intention
+                                          <input
+                                              type="text"
+                                              name="intention"
+                                              required
+                                          />
+                                      </label>
+
+                                      <footer class="actions">
+                                          <button
+                                              type="button"
+                                              class="secondary"
+                                              onclick="document.getElementById('move_dialog_{{.ID}}').close()"
+                                          >
+                                              Cancel
+                                          </button>
+                                          <button type="submit">
+                                              Move
+                                          </button>
+                                      </footer>
+                                  </form>
+                              </article>
+                          </dialog>
+                          {{end}}
+
+                          <form
+                              method="post"
+                              action="/persons/{{$.Data.Person.ID}}/enrollments/{{.ID}}/complete"
+                              onsubmit="return confirm('Complete this enrollment?')"
+                          >
+                              <button type="submit" class="secondary outline">
+                                  Complete…
+                              </button>
+                          </form>
+
+                          <form
+                              method="post"
+                              action="/persons/{{$.Data.Person.ID}}/enrollments/{{.ID}}/stop"
+                              onsubmit="return confirm('Stop this enrollment?')"
+                          >
+                              <button type="submit" class="danger outline">
+                                  Stop…
+                              </button>
+                          </form>
+                          {{else}}
+                              &mdash;
+                          {{end}}
+                      </td>
+                  </tr>
+                  {{else}}
+                  <tr>
+                      <td colspan="5">No campaign enrollments.</td>
+                  </tr>
+                  {{end}}
+              </tbody>
+          </table>
+      </figure>
+  </section>
+
   {{if .Data.Note}}
   <hr />
   <section class="person-note">
@@ -43,7 +258,56 @@
   </section>
   {{end}}
 
+  <dialog id="enroll_dialog">
+      <article>
+          <header>
+              <button
+                  type="button"
+                  aria-label="Close"
+                  rel="prev"
+                  onclick="document.getElementById('enroll_dialog').close()"
+              ></button>
+              <h2>Enroll person</h2>
+          </header>
+
+          <form
+              method="post"
+              action="/persons/{{.Data.Person.ID}}/enrollments"
+          >
+              <label>
+                  Campaign
+                  <select name="campaign" required>
+                      <option value="" selected disabled>
+                          Select campaign
+                      </option>
+                      {{range .Data.AvailableCampaigns}}
+                      <option value="{{.Code}}">{{.Name}}</option>
+                      {{end}}
+                  </select>
+              </label>
+
+              <footer class="actions">
+                  <button
+                      type="button"
+                      class="secondary"
+                      onclick="document.getElementById('enroll_dialog').close()"
+                  >
+                      Cancel
+                  </button>
+                  <button type="submit">Enroll</button>
+              </footer>
+          </form>
+      </article>
+  </dialog>
+
   <footer class="actions">
+      <button
+          type="button"
+          onclick="document.getElementById('enroll_dialog').showModal()"
+          {{if not .Data.AvailableCampaigns}}disabled{{end}}
+      >
+          Enroll…
+      </button>
       <a href="/persons/{{.Data.Person.ID}}/edit" role="button">
           Edit
       </a>

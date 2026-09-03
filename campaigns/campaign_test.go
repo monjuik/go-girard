@@ -37,13 +37,6 @@ func TestNewCampaign(t *testing.T) {
 			"Campaign description",
 		)
 	}
-	if campaign.MaxActivePerCompany() != 1 {
-		t.Fatalf(
-			"campaign.MaxActivePerCompany() = %d, want 1",
-			campaign.MaxActivePerCompany(),
-		)
-	}
-
 	steps := campaign.Steps()
 	if len(steps) != 2 {
 		t.Fatalf("len(campaign.Steps()) = %d, want 2", len(steps))
@@ -66,23 +59,6 @@ func TestNewCampaign(t *testing.T) {
 	steps[0] = Step{}
 	if campaign.Steps()[0].Code() != "discoverPlans" {
 		t.Fatal("modifying Steps() result changed campaign")
-	}
-}
-
-func TestNewCampaignWithoutEnrollmentPolicy(t *testing.T) {
-	config := validCampaignConfig()
-	config.EnrollmentPolicy = nil
-
-	campaign, err := NewCampaign(config)
-	if err != nil {
-		t.Fatalf("NewCampaign() error = %v", err)
-	}
-
-	if campaign.MaxActivePerCompany() != 0 {
-		t.Fatalf(
-			"campaign.MaxActivePerCompany() = %d, want 0",
-			campaign.MaxActivePerCompany(),
-		)
 	}
 }
 
@@ -141,13 +117,6 @@ func TestNewCampaignValidation(t *testing.T) {
 			},
 			wantErr: ErrStepNameRequired,
 		},
-		{
-			name: "invalid enrollment policy",
-			change: func(config *CampaignConfig) {
-				config.EnrollmentPolicy.MaxActivePerCompany = 0
-			},
-			wantErr: ErrEnrollmentPolicyInvalid,
-		},
 	}
 
 	for _, tt := range tests {
@@ -173,9 +142,6 @@ func validCampaignConfig() CampaignConfig {
 		Name:        "  LinkedIn outreach  ",
 		Version:     2,
 		Description: "Campaign description",
-		EnrollmentPolicy: &EnrollmentPolicyConfig{
-			MaxActivePerCompany: 1,
-		},
 		Steps: []StepConfig{
 			{
 				Code:         "discoverPlans",

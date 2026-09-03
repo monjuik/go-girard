@@ -1,0 +1,40 @@
+{{define "dashboard"}} {{template "layout_start" .}}
+
+  <header>
+      <h1>Dashboard</h1>
+  </header>
+
+  <section>
+      <h2>Due actions</h2>
+
+      <figure>
+          <table class="striped">
+              <thead>
+                  <tr>
+                      <th>Name</th>
+                      <th>Campaign</th>
+                      <th>Date</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {{range .Data.Enrollments}}
+                  <tr>
+                      <td>
+                          <a href="/persons/{{.PersonID}}">
+                              {{.PersonName}}
+                          </a>
+                      </td>
+                      <td>{{.Campaign}}</td>
+                      <td><time datetime="{{.Next}}">{{.Next}}</time></td>
+                  </tr>
+                  {{else}}
+                  <tr>
+                      <td colspan="3">No actions due.</td>
+                  </tr>
+                  {{end}}
+              </tbody>
+          </table>
+      </figure>
+  </section>
+
+  {{template "layout_end" .}} {{end}}

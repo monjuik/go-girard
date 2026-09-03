@@ -64,13 +64,71 @@ type recordingCompanyCommands struct {
 	deleteCalls int
 }
 
+type recordingEnrollmentQueries struct {
+	personID   common.ID
+	personRows []campaigns.PersonEnrollmentRowView
+	err        error
+
+	campaignCode  string
+	campaignRows  []campaigns.CampaignPersonRowView
+	campaignErr   error
+	campaignCalls int
+
+	dueThrough common.Date
+	dueRows    []campaigns.DueEnrollmentRowView
+	dueErr     error
+}
+
+type enrollmentTargetCall struct {
+	PersonID     common.ID
+	EnrollmentID common.ID
+}
+
+type postponeEnrollmentCall struct {
+	enrollmentTargetCall
+	Next common.Date
+}
+
+type moveEnrollmentCall struct {
+	enrollmentTargetCall
+	Step      string
+	Next      common.Date
+	Intention string
+}
+
+type recordingEnrollmentCommands struct {
+	enrollPersonID common.ID
+	enrollCampaign string
+	enrollID       common.ID
+	enrollErr      error
+	enrollCalls    int
+
+	postponeCall  postponeEnrollmentCall
+	postponeErr   error
+	postponeCalls int
+
+	moveCall  moveEnrollmentCall
+	moveErr   error
+	moveCalls int
+
+	completeCall  enrollmentTargetCall
+	completeErr   error
+	completeCalls int
+
+	stopCall  enrollmentTargetCall
+	stopErr   error
+	stopCalls int
+}
+
 type serverFixture struct {
-	handler         http.Handler
-	campaigns       map[string]campaigns.Campaign
-	personQueries   *recordingPersonQueries
-	personCommands  *recordingPersonCommands
-	companyQueries  *recordingCompanyQueries
-	companyCommands *recordingCompanyCommands
+	handler            http.Handler
+	campaigns          map[string]campaigns.Campaign
+	personQueries      *recordingPersonQueries
+	personCommands     *recordingPersonCommands
+	companyQueries     *recordingCompanyQueries
+	companyCommands    *recordingCompanyCommands
+	enrollmentQueries  *recordingEnrollmentQueries
+	enrollmentCommands *recordingEnrollmentCommands
 }
 
 func (c *recordingPersonCommands) CreatePerson(
@@ -165,15 +223,117 @@ func (c *recordingCompanyCommands) DeleteCompany(
 	return c.deleteErr
 }
 
+func (q *recordingEnrollmentQueries) ListPersonEnrollments(
+	ctx context.Context,
+	personID common.ID,
+) ([]campaigns.PersonEnrollmentRowView, error) {
+	q.personID = personID
+	return q.personRows, q.err
+}
+
+func (q *recordingEnrollmentQueries) ListCampaignPersons(
+	ctx context.Context,
+	campaign string,
+) ([]campaigns.CampaignPersonRowView, error) {
+	q.campaignCalls++
+	q.campaignCode = campaign
+	return q.campaignRows, q.campaignErr
+}
+
+func (q *recordingEnrollmentQueries) ListDueEnrollments(
+	ctx context.Context,
+	through common.Date,
+) ([]campaigns.DueEnrollmentRowView, error) {
+	q.dueThrough = through
+	return q.dueRows, q.dueErr
+}
+
+func (c *recordingEnrollmentCommands) Enroll(
+	ctx context.Context,
+	personID common.ID,
+	campaignCode string,
+) (common.ID, error) {
+	c.enrollCalls++
+	c.enrollPersonID = personID
+	c.enrollCampaign = campaignCode
+	return c.enrollID, c.enrollErr
+}
+
+func (c *recordingEnrollmentCommands) Postpone(
+	ctx context.Context,
+	personID common.ID,
+	enrollmentID common.ID,
+	next common.Date,
+) error {
+	c.postponeCalls++
+	c.postponeCall = postponeEnrollmentCall{
+		enrollmentTargetCall: enrollmentTargetCall{
+			PersonID:     personID,
+			EnrollmentID: enrollmentID,
+		},
+		Next: next,
+	}
+	return c.postponeErr
+}
+
+func (c *recordingEnrollmentCommands) Move(
+	ctx context.Context,
+	personID common.ID,
+	enrollmentID common.ID,
+	step string,
+	next common.Date,
+	intention string,
+) error {
+	c.moveCalls++
+	c.moveCall = moveEnrollmentCall{
+		enrollmentTargetCall: enrollmentTargetCall{
+			PersonID:     personID,
+			EnrollmentID: enrollmentID,
+		},
+		Step:      step,
+		Next:      next,
+		Intention: intention,
+	}
+	return c.moveErr
+}
+
+func (c *recordingEnrollmentCommands) Stop(
+	ctx context.Context,
+	personID common.ID,
+	enrollmentID common.ID,
+) error {
+	c.stopCalls++
+	c.stopCall = enrollmentTargetCall{
+		PersonID:     personID,
+		EnrollmentID: enrollmentID,
+	}
+	return c.stopErr
+}
+
+func (c *recordingEnrollmentCommands) Complete(
+	ctx context.Context,
+	personID common.ID,
+	enrollmentID common.ID,
+) error {
+	c.completeCalls++
+	c.completeCall = enrollmentTargetCall{
+		PersonID:     personID,
+		EnrollmentID: enrollmentID,
+	}
+	return c.completeErr
+}
+
 func newServerFixture(t *testing.T) *serverFixture {
 	t.Helper()
 
 	fixture := &serverFixture{
-		campaigns:       make(map[string]campaigns.Campaign),
-		personQueries:   &recordingPersonQueries{},
-		personCommands:  &recordingPersonCommands{},
-		companyQueries:  &recordingCompanyQueries{},
-		companyCommands: &recordingCompanyCommands{},
+		campaigns:          make(map[string]campaigns.Campaign),
+		personQueries:      &recordingPersonQueries{},
+		personCommands:     &recordingPersonCommands{},
+		companyQueries:     &recordingCompanyQueries{},
+		companyCommands:    &recordingCompanyCommands{},
+		enrollmentQueries:  &recordingEnrollmentQueries{},
+		enrollmentCommands: &recordingEnrollmentCommands{},
 	}
 
 	server, err := NewServer(
@@ -183,10 +343,17 @@ func newServerFixture(t *testing.T) *serverFixture {
 		fixture.personCommands,
 		fixture.companyQueries,
 		fixture.companyCommands,
+		fixture.enrollmentQueries,
+		fixture.enrollmentCommands,
 	)
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
+	today, err := common.ParseDate("2026-09-03")
+	if err != nil {
+		t.Fatalf("ParseDate() error = %v", err)
+	}
+	server.today = func() common.Date { return today }
 
 	fixture.handler = server.httpServer.Handler
 	return fixture
@@ -246,6 +413,89 @@ func assertBodyContains(
 			t.Fatalf("response body does not contain %q", want)
 		}
 	}
+}
+
+func TestDashboard(t *testing.T) {
+	fixture := newServerFixture(t)
+	campaign := newTestCampaign(t, campaigns.CampaignConfig{
+		Code:    "followUp",
+		Name:    "Follow-up",
+		Version: 1,
+		Steps: []campaigns.StepConfig{
+			{Code: "restoreContext", Name: "Restore context"},
+		},
+	})
+	fixture.campaigns[campaign.Code()] = campaign
+
+	yesterday, err := common.ParseDate("2026-09-02")
+	if err != nil {
+		t.Fatalf("ParseDate() error = %v", err)
+	}
+	today, err := common.ParseDate("2026-09-03")
+	if err != nil {
+		t.Fatalf("ParseDate() error = %v", err)
+	}
+	fixture.enrollmentQueries.dueRows = []campaigns.DueEnrollmentRowView{
+		{
+			PersonID:   "101",
+			PersonName: "Anna Petrova",
+			Campaign:   "followUp",
+			Next:       yesterday,
+		},
+		{
+			PersonID:   "102",
+			PersonName: "Boris Smirnov",
+			Campaign:   "removedCampaign",
+			Next:       today,
+		},
+	}
+
+	response := fixture.get("/")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(
+		t,
+		response,
+		"<title>Dashboard - Go Girard</title>",
+		"<h1>Dashboard</h1>",
+		"<h2>Due actions</h2>",
+		`href="/"`,
+		`aria-current="page"`,
+		"<th>Name</th>",
+		"<th>Campaign</th>",
+		"<th>Date</th>",
+		`href="/persons/101"`,
+		"Anna Petrova",
+		"Follow-up",
+		`datetime="2026-09-02"`,
+		`href="/persons/102"`,
+		"Boris Smirnov",
+		"removedCampaign",
+		`datetime="2026-09-03"`,
+	)
+
+	body := response.Body.String()
+	if strings.Index(body, `href="/"`) > strings.Index(body, `href="/persons"`) {
+		t.Fatal("Dashboard is not the first menu item")
+	}
+	if strings.Index(body, "Anna Petrova") > strings.Index(body, "Boris Smirnov") {
+		t.Fatal("Dashboard changed due enrollment order")
+	}
+	if fixture.enrollmentQueries.dueThrough != today {
+		t.Fatalf(
+			"ListDueEnrollments() through = %q, want %q",
+			fixture.enrollmentQueries.dueThrough,
+			today,
+		)
+	}
+
+	fixture.enrollmentQueries.dueRows = nil
+	response = fixture.get("/")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(t, response, "No actions due.")
+
+	fixture.enrollmentQueries.dueErr = fmt.Errorf("query failed")
+	response = fixture.get("/")
+	assertStatus(t, response, http.StatusInternalServerError)
 }
 
 func TestPersonsPage(t *testing.T) {
@@ -335,6 +585,35 @@ func TestPersonsPageRejectsInvalidSkip(t *testing.T) {
 
 func TestPersonPages(t *testing.T) {
 	fixture := newServerFixture(t)
+	campaign := newTestCampaign(t, campaigns.CampaignConfig{
+		Code:    "followUp",
+		Name:    "Follow-up",
+		Version: 1,
+		Steps: []campaigns.StepConfig{
+			{
+				Code: "restoreContext",
+				Name: "Restore context",
+			},
+			{
+				Code: "discoverChanges",
+				Name: "Discover changes",
+			},
+		},
+	})
+	fixture.campaigns[campaign.Code()] = campaign
+	availableCampaign := newTestCampaign(t, campaigns.CampaignConfig{
+		Code:    "businessDevelopment",
+		Name:    "Business development",
+		Version: 1,
+		Steps: []campaigns.StepConfig{
+			{
+				Code: "introduction",
+				Name: "Introduction",
+			},
+		},
+	})
+	fixture.campaigns[availableCampaign.Code()] = availableCampaign
+
 	fixture.personQueries.person = contacts.PersonView{
 		ID:          "101",
 		Name:        "Anna Petrova",
@@ -343,6 +622,23 @@ func TestPersonPages(t *testing.T) {
 		CompanyName: "Northwind Logistics",
 		Note:        "## Responsibilities\n\n- **Operations**\n- [x] Reporting",
 	}
+
+	next, err := common.ParseDate("2026-09-02")
+	if err != nil {
+		t.Fatalf("ParseDate() error = %v", err)
+	}
+
+	fixture.enrollmentQueries.personRows =
+		[]campaigns.PersonEnrollmentRowView{
+			{
+				ID:        "201",
+				Campaign:  "followUp",
+				Step:      "restoreContext",
+				State:     campaigns.EnrollmentActive,
+				Next:      next,
+				Intention: "Restore context",
+			},
+		}
 
 	response := fixture.get("/persons/new")
 	assertStatus(t, response, http.StatusOK)
@@ -361,6 +657,55 @@ func TestPersonPages(t *testing.T) {
 
 	response = fixture.get("/persons/101?saved=1")
 	assertStatus(t, response, http.StatusOK)
+
+	assertBodyContains(
+		t,
+		response,
+		"<h2>Campaigns</h2>",
+		"Follow-up",
+		"<td>Active</td>",
+		`datetime="2026-09-02"`,
+		"Restore context",
+		"Enroll…",
+		`id="enroll_dialog"`,
+		`action="/persons/101/enrollments"`,
+		`value="businessDevelopment"`,
+		"Business development",
+		"<th>Actions</th>",
+		"Postpone…",
+		`id="postpone_dialog_201"`,
+		`action="/persons/101/enrollments/201/postpone"`,
+		"Move…",
+		`id="move_dialog_201"`,
+		`action="/persons/101/enrollments/201/move"`,
+		`value="discoverChanges"`,
+		`data-intention="Discover changes"`,
+		`onchange="this.form.elements.intention.value = this.selectedOptions[0].dataset.intention"`,
+		"Discover changes",
+		"Complete…",
+		`action="/persons/101/enrollments/201/complete"`,
+		`onsubmit="return confirm('Complete this enrollment?')"`,
+		"Stop…",
+		`action="/persons/101/enrollments/201/stop"`,
+		`onsubmit="return confirm('Stop this enrollment?')"`,
+	)
+	if strings.Contains(response.Body.String(), `value="followUp"`) {
+		t.Fatal("enroll campaign options contain an existing enrollment")
+	}
+	if strings.Contains(response.Body.String(), `value="restoreContext"`) {
+		t.Fatal("move step options contain the current step")
+	}
+	if strings.Contains(response.Body.String(), "Active ·") {
+		t.Fatal("enrollment status contains the current step")
+	}
+
+	if fixture.enrollmentQueries.personID != common.ID(101) {
+		t.Fatalf(
+			"ListPersonEnrollments() person ID = %d, want 101",
+			fixture.enrollmentQueries.personID,
+		)
+	}
+
 	if fixture.personQueries.id != common.ID(101) {
 		t.Fatalf("GetPerson() id = %d, want 101", fixture.personQueries.id)
 	}
@@ -382,6 +727,40 @@ func TestPersonPages(t *testing.T) {
 		`type="checkbox"`,
 		`checked=""`,
 	)
+
+	response = fixture.get("/persons/101?enrolled=1")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(t, response, "Person enrolled in campaign.")
+
+	response = fixture.get("/persons/101?postponed=1")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(t, response, "Action postponed.")
+
+	response = fixture.get("/persons/101?moved=1")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(t, response, "Enrollment moved.")
+
+	response = fixture.get("/persons/101?completed=1")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(t, response, "Enrollment completed.")
+
+	response = fixture.get("/persons/101?stopped=1")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(t, response, "Enrollment stopped.")
+
+	fixture.enrollmentQueries.personRows[0].Step = "removedStep"
+	response = fixture.get("/persons/101")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(
+		t,
+		response,
+		"<td>Active</td>",
+		`value="restoreContext"`,
+		`value="discoverChanges"`,
+	)
+	if strings.Contains(response.Body.String(), "removedStep") {
+		t.Fatal("removed enrollment step is displayed on the person page")
+	}
 
 	fixture.personQueries.person.CompanyID = ""
 	fixture.personQueries.person.CompanyName = ""
@@ -431,6 +810,445 @@ func TestPersonPages(t *testing.T) {
 	fixture.personQueries.err = contacts.ErrPersonNotFound
 	response = fixture.get("/persons/999")
 	assertStatus(t, response, http.StatusNotFound)
+}
+
+func TestEnrollPerson(t *testing.T) {
+	fixture := newServerFixture(t)
+	campaign := newTestCampaign(t, campaigns.CampaignConfig{
+		Code:    "followUp",
+		Name:    "Follow-up",
+		Version: 1,
+		Steps: []campaigns.StepConfig{
+			{
+				Code: "restoreContext",
+				Name: "Restore context",
+			},
+		},
+	})
+	fixture.campaigns[campaign.Code()] = campaign
+	fixture.personQueries.person = contacts.PersonView{
+		ID:   "101",
+		Name: "Anna Petrova",
+	}
+	fixture.enrollmentCommands.enrollID = common.ID(201)
+
+	response := fixture.postForm(
+		"/persons/101/enrollments",
+		url.Values{"campaign": {"followUp"}},
+	)
+	assertStatus(t, response, http.StatusSeeOther)
+	if location := response.Header().Get("Location"); location != "/persons/101?enrolled=1" {
+		t.Fatalf("enroll Location = %q, want person page", location)
+	}
+	if fixture.enrollmentCommands.enrollCalls != 1 {
+		t.Fatalf(
+			"Enroll() calls = %d, want 1",
+			fixture.enrollmentCommands.enrollCalls,
+		)
+	}
+	if fixture.enrollmentCommands.enrollPersonID != common.ID(101) {
+		t.Fatalf(
+			"Enroll() person ID = %d, want 101",
+			fixture.enrollmentCommands.enrollPersonID,
+		)
+	}
+	if fixture.enrollmentCommands.enrollCampaign != "followUp" {
+		t.Fatalf(
+			"Enroll() campaign = %q, want %q",
+			fixture.enrollmentCommands.enrollCampaign,
+			"followUp",
+		)
+	}
+
+	fixture.enrollmentCommands.enrollErr = campaigns.ErrCampaignNotFound
+	response = fixture.postForm(
+		"/persons/101/enrollments",
+		url.Values{"campaign": {"missingCampaign"}},
+	)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+	if fixture.enrollmentCommands.enrollCalls != 2 {
+		t.Fatalf(
+			"Enroll() calls = %d after unknown campaign, want 2",
+			fixture.enrollmentCommands.enrollCalls,
+		)
+	}
+	if fixture.enrollmentCommands.enrollCampaign != "missingCampaign" {
+		t.Fatalf(
+			"Enroll() campaign = %q, want missingCampaign",
+			fixture.enrollmentCommands.enrollCampaign,
+		)
+	}
+
+	fixture.enrollmentCommands.enrollErr = campaigns.ErrEnrollmentExists
+	response = fixture.postForm(
+		"/persons/101/enrollments",
+		url.Values{"campaign": {"followUp"}},
+	)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+
+	fixture.enrollmentCommands.enrollErr = nil
+	fixture.personQueries.err = contacts.ErrPersonNotFound
+	callsBefore := fixture.enrollmentCommands.enrollCalls
+	response = fixture.postForm(
+		"/persons/999/enrollments",
+		url.Values{"campaign": {"followUp"}},
+	)
+	assertStatus(t, response, http.StatusNotFound)
+	if fixture.enrollmentCommands.enrollCalls != callsBefore {
+		t.Fatal("missing person reached Enroll()")
+	}
+
+	fixture.personQueries.err = nil
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/persons/101/enrollments",
+		strings.NewReader(
+			"campaign="+strings.Repeat("a", maxEnrollmentFormBodySize),
+		),
+	)
+	request.Header.Set(
+		"Content-Type",
+		"application/x-www-form-urlencoded",
+	)
+	response = fixture.serve(request)
+	assertStatus(t, response, http.StatusRequestEntityTooLarge)
+}
+
+func TestPostponeEnrollment(t *testing.T) {
+	fixture := newServerFixture(t)
+	fixture.personQueries.person = contacts.PersonView{
+		ID:   "101",
+		Name: "Anna Petrova",
+	}
+
+	next, err := common.ParseDate("2026-09-04")
+	if err != nil {
+		t.Fatalf("ParseDate() error = %v", err)
+	}
+
+	response := fixture.postForm(
+		"/persons/101/enrollments/201/postpone",
+		url.Values{"next": {next.String()}},
+	)
+	assertStatus(t, response, http.StatusSeeOther)
+	if location := response.Header().Get("Location"); location != "/persons/101?postponed=1" {
+		t.Fatalf("postpone Location = %q, want person page", location)
+	}
+	if fixture.enrollmentCommands.postponeCalls != 1 {
+		t.Fatalf(
+			"Postpone() calls = %d, want 1",
+			fixture.enrollmentCommands.postponeCalls,
+		)
+	}
+	wantPostponeCall := postponeEnrollmentCall{
+		enrollmentTargetCall: enrollmentTargetCall{
+			PersonID:     common.ID(101),
+			EnrollmentID: common.ID(201),
+		},
+		Next: next,
+	}
+	if fixture.enrollmentCommands.postponeCall != wantPostponeCall {
+		t.Fatalf(
+			"Postpone() call = %+v, want %+v",
+			fixture.enrollmentCommands.postponeCall,
+			wantPostponeCall,
+		)
+	}
+
+	callsBefore := fixture.enrollmentCommands.postponeCalls
+	response = fixture.postForm(
+		"/persons/101/enrollments/201/postpone",
+		url.Values{"next": {"invalid"}},
+	)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+	if fixture.enrollmentCommands.postponeCalls != callsBefore {
+		t.Fatal("invalid date reached Postpone()")
+	}
+
+	for _, tt := range []struct {
+		name       string
+		commandErr error
+		wantStatus int
+	}{
+		{"invalid next", campaigns.ErrEnrollmentNextInvalid, http.StatusUnprocessableEntity},
+		{"date not future", campaigns.ErrEnrollmentDateNotFuture, http.StatusUnprocessableEntity},
+		{"inactive", campaigns.ErrEnrollmentInactive, http.StatusUnprocessableEntity},
+		{"not found", campaigns.ErrEnrollmentNotFound, http.StatusNotFound},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture.enrollmentCommands.postponeErr = tt.commandErr
+			response := fixture.postForm(
+				"/persons/101/enrollments/201/postpone",
+				url.Values{"next": {next.String()}},
+			)
+			assertStatus(t, response, tt.wantStatus)
+		})
+	}
+
+	fixture.enrollmentCommands.postponeErr = nil
+	callsBefore = fixture.enrollmentCommands.postponeCalls
+	response = fixture.postForm(
+		"/persons/101/enrollments/invalid/postpone",
+		url.Values{"next": {next.String()}},
+	)
+	assertStatus(t, response, http.StatusNotFound)
+	if fixture.enrollmentCommands.postponeCalls != callsBefore {
+		t.Fatal("invalid enrollment ID reached Postpone()")
+	}
+}
+
+func TestMoveEnrollment(t *testing.T) {
+	fixture := newServerFixture(t)
+	fixture.personQueries.person = contacts.PersonView{
+		ID:   "101",
+		Name: "Anna Petrova",
+	}
+
+	next, err := common.ParseDate("2026-09-04")
+	if err != nil {
+		t.Fatalf("ParseDate() error = %v", err)
+	}
+
+	values := url.Values{
+		"step":      {"discoverChanges"},
+		"next":      {next.String()},
+		"intention": {"Discover changes"},
+	}
+	response := fixture.postForm(
+		"/persons/101/enrollments/201/move",
+		values,
+	)
+	assertStatus(t, response, http.StatusSeeOther)
+	if location := response.Header().Get("Location"); location != "/persons/101?moved=1" {
+		t.Fatalf("move Location = %q, want person page", location)
+	}
+	if fixture.enrollmentCommands.moveCalls != 1 {
+		t.Fatalf(
+			"Move() calls = %d, want 1",
+			fixture.enrollmentCommands.moveCalls,
+		)
+	}
+	wantMoveCall := moveEnrollmentCall{
+		enrollmentTargetCall: enrollmentTargetCall{
+			PersonID:     common.ID(101),
+			EnrollmentID: common.ID(201),
+		},
+		Step:      "discoverChanges",
+		Next:      next,
+		Intention: "Discover changes",
+	}
+	if fixture.enrollmentCommands.moveCall != wantMoveCall {
+		t.Fatalf(
+			"Move() call = %+v, want %+v",
+			fixture.enrollmentCommands.moveCall,
+			wantMoveCall,
+		)
+	}
+
+	callsBefore := fixture.enrollmentCommands.moveCalls
+	invalidValues := url.Values{
+		"step":      {"discoverChanges"},
+		"next":      {"invalid"},
+		"intention": {"Discover changes"},
+	}
+	response = fixture.postForm(
+		"/persons/101/enrollments/201/move",
+		invalidValues,
+	)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+	if fixture.enrollmentCommands.moveCalls != callsBefore {
+		t.Fatal("invalid date reached Move()")
+	}
+
+	for _, tt := range []struct {
+		name       string
+		commandErr error
+		wantStatus int
+	}{
+		{"campaign not found", campaigns.ErrCampaignNotFound, http.StatusUnprocessableEntity},
+		{"invalid step", campaigns.ErrEnrollmentStepInvalid, http.StatusUnprocessableEntity},
+		{"unchanged step", campaigns.ErrEnrollmentStepUnchanged, http.StatusUnprocessableEntity},
+		{"invalid next", campaigns.ErrEnrollmentNextInvalid, http.StatusUnprocessableEntity},
+		{"date not future", campaigns.ErrEnrollmentDateNotFuture, http.StatusUnprocessableEntity},
+		{"intention required", campaigns.ErrEnrollmentIntentionRequired, http.StatusUnprocessableEntity},
+		{"inactive", campaigns.ErrEnrollmentInactive, http.StatusUnprocessableEntity},
+		{"not found", campaigns.ErrEnrollmentNotFound, http.StatusNotFound},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture.enrollmentCommands.moveErr = tt.commandErr
+			response := fixture.postForm(
+				"/persons/101/enrollments/201/move",
+				values,
+			)
+			assertStatus(t, response, tt.wantStatus)
+		})
+	}
+
+	fixture.enrollmentCommands.moveErr = nil
+	callsBefore = fixture.enrollmentCommands.moveCalls
+	response = fixture.postForm(
+		"/persons/101/enrollments/invalid/move",
+		values,
+	)
+	assertStatus(t, response, http.StatusNotFound)
+	if fixture.enrollmentCommands.moveCalls != callsBefore {
+		t.Fatal("invalid enrollment ID reached Move()")
+	}
+}
+
+func TestCompleteEnrollment(t *testing.T) {
+	fixture := newServerFixture(t)
+	fixture.personQueries.person = contacts.PersonView{
+		ID:   "101",
+		Name: "Anna Petrova",
+	}
+
+	response := fixture.postForm(
+		"/persons/101/enrollments/201/complete",
+		nil,
+	)
+	assertStatus(t, response, http.StatusSeeOther)
+	if location := response.Header().Get("Location"); location != "/persons/101?completed=1" {
+		t.Fatalf("complete Location = %q, want person page", location)
+	}
+	if fixture.enrollmentCommands.completeCalls != 1 {
+		t.Fatalf(
+			"Complete() calls = %d, want 1",
+			fixture.enrollmentCommands.completeCalls,
+		)
+	}
+	wantCompleteCall := enrollmentTargetCall{
+		PersonID:     common.ID(101),
+		EnrollmentID: common.ID(201),
+	}
+	if fixture.enrollmentCommands.completeCall != wantCompleteCall {
+		t.Fatalf(
+			"Complete() call = %+v, want %+v",
+			fixture.enrollmentCommands.completeCall,
+			wantCompleteCall,
+		)
+	}
+
+	fixture.enrollmentCommands.completeErr = campaigns.ErrEnrollmentInactive
+	response = fixture.postForm(
+		"/persons/101/enrollments/201/complete",
+		nil,
+	)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+
+	fixture.enrollmentCommands.completeErr = campaigns.ErrEnrollmentNotFound
+	response = fixture.postForm(
+		"/persons/101/enrollments/201/complete",
+		nil,
+	)
+	assertStatus(t, response, http.StatusNotFound)
+
+	fixture.enrollmentCommands.completeErr = nil
+	callsBefore := fixture.enrollmentCommands.completeCalls
+	response = fixture.postForm(
+		"/persons/101/enrollments/invalid/complete",
+		nil,
+	)
+	assertStatus(t, response, http.StatusNotFound)
+	if fixture.enrollmentCommands.completeCalls != callsBefore {
+		t.Fatal("invalid enrollment ID reached Complete()")
+	}
+}
+
+func TestStopEnrollment(t *testing.T) {
+	fixture := newServerFixture(t)
+	fixture.personQueries.person = contacts.PersonView{
+		ID:   "101",
+		Name: "Anna Petrova",
+	}
+
+	response := fixture.postForm(
+		"/persons/101/enrollments/201/stop",
+		nil,
+	)
+	assertStatus(t, response, http.StatusSeeOther)
+	if location := response.Header().Get("Location"); location != "/persons/101?stopped=1" {
+		t.Fatalf("stop Location = %q, want person page", location)
+	}
+	if fixture.enrollmentCommands.stopCalls != 1 {
+		t.Fatalf(
+			"Stop() calls = %d, want 1",
+			fixture.enrollmentCommands.stopCalls,
+		)
+	}
+	wantStopCall := enrollmentTargetCall{
+		PersonID:     common.ID(101),
+		EnrollmentID: common.ID(201),
+	}
+	if fixture.enrollmentCommands.stopCall != wantStopCall {
+		t.Fatalf(
+			"Stop() call = %+v, want %+v",
+			fixture.enrollmentCommands.stopCall,
+			wantStopCall,
+		)
+	}
+
+	fixture.enrollmentCommands.stopErr = campaigns.ErrEnrollmentInactive
+	response = fixture.postForm(
+		"/persons/101/enrollments/201/stop",
+		nil,
+	)
+	assertStatus(t, response, http.StatusUnprocessableEntity)
+
+	fixture.enrollmentCommands.stopErr = campaigns.ErrEnrollmentNotFound
+	response = fixture.postForm(
+		"/persons/101/enrollments/201/stop",
+		nil,
+	)
+	assertStatus(t, response, http.StatusNotFound)
+
+	fixture.enrollmentCommands.stopErr = nil
+	callsBefore := fixture.enrollmentCommands.stopCalls
+	response = fixture.postForm(
+		"/persons/101/enrollments/invalid/stop",
+		nil,
+	)
+	assertStatus(t, response, http.StatusNotFound)
+	if fixture.enrollmentCommands.stopCalls != callsBefore {
+		t.Fatal("invalid enrollment ID reached Stop()")
+	}
+}
+
+func TestInactiveEnrollmentHasNoActions(t *testing.T) {
+	for _, state := range []campaigns.EnrollmentState{
+		campaigns.EnrollmentCompleted,
+		campaigns.EnrollmentStopped,
+	} {
+		t.Run(string(state), func(t *testing.T) {
+			fixture := newServerFixture(t)
+			fixture.personQueries.person = contacts.PersonView{
+				ID:   "101",
+				Name: "Anna Petrova",
+			}
+			fixture.enrollmentQueries.personRows = []campaigns.PersonEnrollmentRowView{
+				{
+					ID:        "201",
+					Campaign:  "followUp",
+					Step:      "restoreContext",
+					State:     state,
+					Intention: "Restore context",
+				},
+			}
+
+			response := fixture.get("/persons/101")
+			assertStatus(t, response, http.StatusOK)
+			for _, action := range []string{
+				"Postpone…",
+				"Move…",
+				"Complete…",
+				"Stop…",
+			} {
+				if strings.Contains(response.Body.String(), action) {
+					t.Fatalf("%s enrollment contains %s action", state, action)
+				}
+			}
+		})
+	}
 }
 
 func TestPersonPagesRejectInvalidID(t *testing.T) {
@@ -1084,6 +1902,8 @@ func FuzzPersonFormEndpoints(f *testing.F) {
 		commands,
 		&recordingCompanyQueries{},
 		&recordingCompanyCommands{},
+		nil,
+		nil,
 	)
 	if err != nil {
 		f.Fatalf("NewServer() error = %v", err)
@@ -1287,9 +2107,6 @@ func TestCampaignPage(t *testing.T) {
 		Name:        "Follow-up",
 		Version:     2,
 		Description: "Resume **earlier discussions**.",
-		EnrollmentPolicy: &campaigns.EnrollmentPolicyConfig{
-			MaxActivePerCompany: 1,
-		},
 		Steps: []campaigns.StepConfig{
 			{
 				Code:         "restoreContext",
@@ -1303,6 +2120,25 @@ func TestCampaignPage(t *testing.T) {
 		},
 	})
 	fixture.campaigns[campaign.Code()] = campaign
+	fixture.enrollmentQueries.campaignRows = []campaigns.CampaignPersonRowView{
+		{
+			PersonID:   "101",
+			PersonName: "Anna Petrova",
+			CompanyID:  "7",
+			Company:    "Northwind Logistics",
+			State:      campaigns.EnrollmentActive,
+		},
+		{
+			PersonID:   "102",
+			PersonName: "Boris Smirnov",
+			State:      campaigns.EnrollmentCompleted,
+		},
+		{
+			PersonID:   "103",
+			PersonName: "Carla Gomez",
+			State:      campaigns.EnrollmentStopped,
+		},
+	}
 
 	response := fixture.get("/config/campaigns/followUp")
 	assertStatus(t, response, http.StatusOK)
@@ -1316,17 +2152,57 @@ func TestCampaignPage(t *testing.T) {
 		"<code>followUp</code>",
 		"<code>restoreContext</code>",
 		"<code>agreeNextAction</code>",
-		"Max active per company",
+		"<h2>Persons</h2>",
+		"<th>Name</th>",
+		"<th>Company</th>",
+		"<th>Status</th>",
+		`href="/persons/101"`,
+		"Anna Petrova",
+		`href="/companies/7"`,
+		"Northwind Logistics",
+		"<td>Active</td>",
+		`href="/persons/102"`,
+		"Boris Smirnov",
+		"<td>Completed</td>",
+		`href="/persons/103"`,
+		"Carla Gomez",
+		"<td>Stopped</td>",
+		"&mdash;",
 	)
+	if fixture.enrollmentQueries.campaignCode != "followUp" {
+		t.Fatalf(
+			"ListCampaignPersons() campaign = %q, want followUp",
+			fixture.enrollmentQueries.campaignCode,
+		)
+	}
 
 	body := response.Body.String()
 	if strings.Index(body, "restoreContext") >
 		strings.Index(body, "agreeNextAction") {
 		t.Fatal("campaign steps are not in configured order")
 	}
+	if strings.Index(body, "Anna Petrova") >
+		strings.Index(body, "Boris Smirnov") ||
+		strings.Index(body, "Boris Smirnov") >
+			strings.Index(body, "Carla Gomez") {
+		t.Fatal("campaign page changed person order")
+	}
 
+	fixture.enrollmentQueries.campaignRows = nil
+	response = fixture.get("/config/campaigns/followUp")
+	assertStatus(t, response, http.StatusOK)
+	assertBodyContains(t, response, "No persons enrolled.")
+
+	fixture.enrollmentQueries.campaignErr = fmt.Errorf("query failed")
+	response = fixture.get("/config/campaigns/followUp")
+	assertStatus(t, response, http.StatusInternalServerError)
+
+	callsBefore := fixture.enrollmentQueries.campaignCalls
 	response = fixture.get("/config/campaigns/missing")
 	assertStatus(t, response, http.StatusNotFound)
+	if fixture.enrollmentQueries.campaignCalls != callsBefore {
+		t.Fatal("missing campaign reached ListCampaignPersons()")
+	}
 }
 
 func newTestCampaign(

@@ -21,16 +21,6 @@
           <dd>{{.Data.Campaign.Version}}</dd>
       </div>
 
-      <div>
-          <dt>Max active per company</dt>
-          <dd>
-              {{if .Data.Campaign.MaxActivePerCompany}}
-                  {{.Data.Campaign.MaxActivePerCompany}}
-              {{else}}
-                  &mdash;
-              {{end}}
-          </dd>
-      </div>
   </dl>
 
   <section>
@@ -48,6 +38,47 @@
           </li>
           {{end}}
       </ol>
+  </section>
+
+  <section>
+      <h2>Persons</h2>
+
+      <figure>
+          <table class="striped">
+              <thead>
+                  <tr>
+                      <th>Name</th>
+                      <th>Company</th>
+                      <th>Status</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {{range .Data.Persons}}
+                  <tr>
+                      <td>
+                          <a href="/persons/{{.PersonID}}">
+                              {{.PersonName}}
+                          </a>
+                      </td>
+                      <td>
+                          {{if .CompanyID}}
+                              <a href="/companies/{{.CompanyID}}">
+                                  {{.Company}}
+                              </a>
+                          {{else}}
+                              &mdash;
+                          {{end}}
+                      </td>
+                      <td>{{.Status}}</td>
+                  </tr>
+                  {{else}}
+                  <tr>
+                      <td colspan="3">No persons enrolled.</td>
+                  </tr>
+                  {{end}}
+              </tbody>
+          </table>
+      </figure>
   </section>
 
   {{template "layout_end" .}} {{end}}
