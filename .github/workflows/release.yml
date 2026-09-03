@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Validate semantic version
+        id: version
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a tag such as v0.2.0, got: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-24.04
+            archive: go-girard_${{ needs.validate.outputs.version }}_linux_amd64.tar.gz
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+            archive: go-girard_${{ needs.validate.outputs.version }}_linux_arm64.tar.gz
+          - goos: darwin
+            goarch: amd64
+            runner: macos-15-intel
+            archive: go-girard_${{ needs.validate.outputs.version }}_darwin_amd64.tar.gz
+          - goos: darwin
+            goarch: arm64
+            runner: macos-15
+            archive: go-girard_${{ needs.validate.outputs.version }}_darwin_arm64.tar.gz
+          - goos: windows
+            goarch: amd64
+            runner: windows-2025
+            archive: go-girard_${{ needs.validate.outputs.version }}_windows_amd64.zip
+          - goos: windows
+            goarch: arm64
+            runner: windows-11-arm
+            archive: go-girard_${{ needs.validate.outputs.version }}_windows_arm64.zip
+    env:
+      CGO_ENABLED: "1"
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      ARCHIVE: ${{ matrix.archive }}
+      PACKAGE_DIR: go-girard_${{ needs.validate.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build and package Unix archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p "$PACKAGE_DIR"
+          go build -trimpath -ldflags="-s -w -X main.version=$VERSION" -o "$PACKAGE_DIR/go-girard" ./cmd/web
+          test "$("$PACKAGE_DIR/go-girard" -version)" = "go-girard $VERSION"
+          cp README.md LICENSE config.example.json "$PACKAGE_DIR/"
+          tar -czf "$ARCHIVE" "$PACKAGE_DIR"
+
+      - name: Build and package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path $env:PACKAGE_DIR | Out-Null
+          go build -trimpath -ldflags="-s -w -X main.version=$env:VERSION" -o "$env:PACKAGE_DIR/go-girard.exe" ./cmd/web
+          $actualVersion = & "$env:PACKAGE_DIR/go-girard.exe" -version
+          if ($actualVersion -ne "go-girard $env:VERSION") {
+            throw "Unexpected version output: $actualVersion"
+          }
+          Copy-Item README.md, LICENSE, config.example.json -Destination $env:PACKAGE_DIR
+          Compress-Archive -Path $env:PACKAGE_DIR -DestinationPath $env:ARCHIVE
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+          compression-level: 0
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs:
+      - validate
+      - build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: go-girard_*
+          path: dist
+          merge-multiple: true
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd dist
+          mapfile -t archives < <(find . -maxdepth 1 -type f -name 'go-girard_*' -printf '%f\n' | sort)
+          if [[ "${#archives[@]}" -ne 6 ]]; then
+            echo "Expected 6 release archives, found ${#archives[@]}" >&2
+            printf '%s\n' "${archives[@]}" >&2
+            exit 1
+          fi
+          sha256sum "${archives[@]}" > SHA256SUMS
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "go-girard $GITHUB_REF_NAME" \
+            --generate-notes

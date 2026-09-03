@@ -126,3 +126,21 @@ go-girard/
 - [ ] company page: markdown note
 - [ ] company page: a list of persons
 - [ ] graceful shutdown of the db files after getting sigkill
+
+
+## Releases
+
+GitHub Releases provide archives for Linux, macOS, and Windows on amd64 and
+arm64. Each archive contains the executable, this README, the license, and an
+example configuration. Use the published `SHA256SUMS` file to verify downloads.
+
+To publish a semantic version after the release workflow is present on `main`,
+create and push an annotated tag:
+
+```bash
+git tag -a v0.2.0 -m "Release v0.2.0"
+git push origin v0.2.0
+```
+
+The tag triggers tests, native CGO builds, and publication of the GitHub
+Release with automatically generated release notes.

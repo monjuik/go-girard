@@ -43,6 +43,12 @@ If the configuration file does not exist, the application starts with an empty c
 
 Use `go run ./cmd/web -help` to display the available options.
 
+Display the version and exit:
+
+```bash
+go-girard -version
+```
+
 ## How to use
 
 ### Markdown in the notes

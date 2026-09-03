@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 
@@ -12,21 +14,35 @@ import (
 	"github.com/monjuik/go-girard/contacts"
 )
 
+var version = "dev"
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	if err := run(); err != nil {
+	if err := run(os.Args[1:], os.Stdout); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		slog.Error("application stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	port := flag.Int("port", 8080, "HTTP server port")
-	dbPath := flag.String("db", "go-girard.db", "SQLite database path")
-	configPath := flag.String("config", "config.json", "Config path")
-	flag.Parse()
+func run(args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("go-girard", flag.ContinueOnError)
+	port := flags.Int("port", 8080, "HTTP server port")
+	dbPath := flags.String("db", "go-girard.db", "SQLite database path")
+	configPath := flags.String("config", "config.json", "Config path")
+	showVersion := flags.Bool("version", false, "Display version and exit")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	if *showVersion {
+		_, err := fmt.Fprintf(stdout, "go-girard %s\n", version)
+		return err
+	}
 
 	config, err := app.LoadConfig(*configPath)
 	if err != nil {
