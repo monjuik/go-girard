@@ -53,14 +53,6 @@ jobs:
             goarch: arm64
             runner: macos-15
             archive: go-girard_${{ needs.validate.outputs.version }}_darwin_arm64.tar.gz
-          - goos: windows
-            goarch: amd64
-            runner: windows-2025
-            archive: go-girard_${{ needs.validate.outputs.version }}_windows_amd64.zip
-          - goos: windows
-            goarch: arm64
-            runner: windows-11-arm
-            archive: go-girard_${{ needs.validate.outputs.version }}_windows_arm64.zip
     env:
       CGO_ENABLED: "1"
       GOOS: ${{ matrix.goos }}
@@ -81,8 +73,7 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Build and package Unix archive
-        if: runner.os != 'Windows'
+      - name: Build and package archive
         shell: bash
         run: |
           mkdir -p "$PACKAGE_DIR"
@@ -90,19 +81,6 @@ jobs:
           test "$("$PACKAGE_DIR/go-girard" -version)" = "go-girard $VERSION"
           cp README.md LICENSE config.example.json "$PACKAGE_DIR/"
           tar -czf "$ARCHIVE" "$PACKAGE_DIR"
-
-      - name: Build and package Windows archive
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path $env:PACKAGE_DIR | Out-Null
-          go build -trimpath -ldflags="-s -w -X main.version=$env:VERSION" -o "$env:PACKAGE_DIR/go-girard.exe" ./cmd/web
-          $actualVersion = & "$env:PACKAGE_DIR/go-girard.exe" -version
-          if ($actualVersion -ne "go-girard $env:VERSION") {
-            throw "Unexpected version output: $actualVersion"
-          }
-          Copy-Item README.md, LICENSE, config.example.json -Destination $env:PACKAGE_DIR
-          Compress-Archive -Path $env:PACKAGE_DIR -DestinationPath $env:ARCHIVE
 
       - name: Upload archive
         uses: actions/upload-artifact@v7
@@ -133,8 +111,8 @@ jobs:
         run: |
           cd dist
           mapfile -t archives < <(find . -maxdepth 1 -type f -name 'go-girard_*' -printf '%f\n' | sort)
-          if [[ "${#archives[@]}" -ne 6 ]]; then
-            echo "Expected 6 release archives, found ${#archives[@]}" >&2
+          if [[ "${#archives[@]}" -ne 4 ]]; then
+            echo "Expected 4 release archives, found ${#archives[@]}" >&2
             printf '%s\n' "${archives[@]}" >&2
             exit 1
           fi

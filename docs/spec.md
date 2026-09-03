@@ -130,9 +130,9 @@ go-girard/
 
 ## Releases
 
-GitHub Releases provide archives for Linux, macOS, and Windows on amd64 and
-arm64. Each archive contains the executable, this README, the license, and an
-example configuration. Use the published `SHA256SUMS` file to verify downloads.
+GitHub Releases provide archives for Linux and macOS on amd64 and arm64. Each
+archive contains the executable, this README, the license, and an example
+configuration. Use the published `SHA256SUMS` file to verify downloads.
 
 To publish a semantic version after the release workflow is present on `main`,
 create and push an annotated tag:
