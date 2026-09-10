@@ -49,6 +49,14 @@ INSERT INTO person (id, name, position, company)
 VALUES (101, 'Anna Petrova', 'Head of Operations', 1);
 ```
 
+### DB backup
+
+Create a backup:
+`sqlite3 go-girard.db ".backup 'go-girard-backup-$(date +%Y%m%d-%H%M%S).db'"`
+
+Check file:
+`sqlite3 go-girard-backup-*.db "PRAGMA integrity_check;"`
+
 ## Main entities
 
 - Person. Name, birthday, photo, position, company, contacts, note, audit
