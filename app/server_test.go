@@ -338,6 +338,7 @@ func newServerFixture(t *testing.T) *serverFixture {
 
 	server, err := NewServer(
 		0,
+		"test",
 		fixture.campaigns,
 		fixture.personQueries,
 		fixture.personCommands,
@@ -1897,6 +1898,7 @@ func FuzzPersonFormEndpoints(f *testing.F) {
 	}
 	server, err := NewServer(
 		0,
+		"test",
 		nil,
 		&recordingPersonQueries{},
 		commands,

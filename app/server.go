@@ -144,6 +144,7 @@ type Server struct {
 
 func NewServer(
 	port int,
+	version string,
 	campaigns map[string]campaigns.Campaign,
 	personQueries contacts.PersonQueries,
 	personCommands contacts.PersonCommands,
@@ -170,6 +171,7 @@ func NewServer(
 		templates: templates,
 	}
 	mux := http.NewServeMux()
+	mux.Handle("/mcp", server.newMCPHandler(version))
 	mux.HandleFunc("GET /{$}", server.handleDashboard)
 	mux.HandleFunc("GET /persons", server.handlePersons)
 	mux.HandleFunc("GET /persons/new", server.handleNewPerson)

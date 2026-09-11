@@ -348,10 +348,13 @@ func (q *SQLiteEnrollmentQueries) ListDueEnrollments(
 		ctx,
 		`
 			SELECT
+				enrollment.id,
 				person.id,
 				person.name,
 				enrollment.campaign,
-				enrollment.next
+				enrollment.step,
+				enrollment.next,
+				enrollment.intention
 			FROM enrollment
 			JOIN person
 				ON person.id = enrollment.person
@@ -377,16 +380,20 @@ func (q *SQLiteEnrollmentQueries) ListDueEnrollments(
 	result := make([]DueEnrollmentRowView, 0)
 	for rows.Next() {
 		var (
+			rawID       int64
 			rawPersonID int64
 			rawNext     string
 			row         DueEnrollmentRowView
 		)
 
 		if err := rows.Scan(
+			&rawID,
 			&rawPersonID,
 			&row.PersonName,
 			&row.Campaign,
+			&row.Step,
 			&rawNext,
+			&row.Intention,
 		); err != nil {
 			return nil, fmt.Errorf(
 				"scan due enrollment: %w",
@@ -402,6 +409,7 @@ func (q *SQLiteEnrollmentQueries) ListDueEnrollments(
 			)
 		}
 
+		row.ID = common.ID(rawID).String()
 		row.PersonID = common.ID(rawPersonID).String()
 		row.Next = next
 		result = append(result, row)

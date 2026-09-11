@@ -62,6 +62,23 @@ func TestNewCampaign(t *testing.T) {
 	}
 }
 
+func TestCampaignFindStep(t *testing.T) {
+	campaign, err := NewCampaign(validCampaignConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range campaign.Steps() {
+		got, found := campaign.FindStep(want.Code())
+		if !found || got != want {
+			t.Fatalf("FindStep(%q) = (%+v, %v), want (%+v, true)", want.Code(), got, found, want)
+		}
+	}
+	if got, found := campaign.FindStep("missing"); found || got != (Step{}) {
+		t.Fatalf("FindStep(missing) = (%+v, %v), want (Step{}, false)", got, found)
+	}
+}
+
 func TestNewCampaignValidation(t *testing.T) {
 	tests := []struct {
 		name    string

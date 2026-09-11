@@ -110,7 +110,7 @@ func (s *EnrollmentService) Move(
 	if !exists {
 		return ErrCampaignNotFound
 	}
-	if !campaignHasStep(campaign, step) {
+	if _, exists := campaign.FindStep(step); !exists {
 		return ErrEnrollmentStepInvalid
 	}
 
@@ -195,13 +195,4 @@ func (s *EnrollmentService) loadEnrollment(
 	}
 
 	return enrollment, nil
-}
-
-func campaignHasStep(campaign Campaign, code string) bool {
-	for _, step := range campaign.Steps() {
-		if step.Code() == code {
-			return true
-		}
-	}
-	return false
 }

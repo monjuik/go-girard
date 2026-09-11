@@ -75,6 +75,7 @@ func run(args []string, stdout io.Writer) error {
 
 	server, err := app.NewServer(
 		*port,
+		version,
 		config.Campaigns,
 		personQueries,
 		personCommands,

@@ -62,10 +62,13 @@ type CampaignPersonRowView struct {
 // DueEnrollmentRowView contains an enrollment displayed
 // in the Dashboard due-action queue.
 type DueEnrollmentRowView struct {
+	ID         string
 	PersonID   string
 	PersonName string
 	Campaign   string
+	Step       string
 	Next       common.Date
+	Intention  string
 }
 
 func NewEnrollment(

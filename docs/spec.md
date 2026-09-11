@@ -76,14 +76,17 @@ Audit stores the modification history for the current entity: created, updated e
 
 Strictly read-only.
 
+Available at `/mcp` on the web server's port using stateless Streamable HTTP
+with JSON responses. Starts with the UI; no separate authentication.
+
 ### list_due_intentions
 
 Provides the queue of overdue intentions and intentions due today.
 
-### get_intention_context
+### get_person_context
 
-Provides context of the action: intention, person and notes, company, campaign, current step, and instructions.
-
+Accepts `person_id` from a `list_due_intentions` item's `person.id`.
+Provides the person's details. Access is not restricted to the due queue.
 
 ## Expected target file structure
 

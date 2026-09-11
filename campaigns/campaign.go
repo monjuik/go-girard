@@ -123,6 +123,15 @@ func (c Campaign) Steps() []Step {
 	return append([]Step(nil), c.steps...)
 }
 
+func (c Campaign) FindStep(code string) (Step, bool) {
+	for _, step := range c.steps {
+		if step.Code() == code {
+			return step, true
+		}
+	}
+	return Step{}, false
+}
+
 func (s Step) Code() string {
 	return s.code
 }
