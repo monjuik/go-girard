@@ -247,9 +247,14 @@
     .split p { color: var(--muted); font-size: 1.12rem; }
     .split .statement { color: var(--ink); font-size: 1.5rem; line-height: 1.35; }
 
-    .visual { padding: 0; background: var(--soft-bg); }
+    .visual {
+        padding: 0;
+        background: var(--soft-bg);
+        width: 100%;
+        max-width: 840px;
+        margin: 3.5rem auto;}
     .visual .wrap { width: min(100%, 1440px); }
-    .visual img { display: block; width: 100%; height: auto; }
+    .visual img { display: block; width: 100%; height: auto; border-radius: 12px;}
 
     .ai-badge {
       display: inline-block;
