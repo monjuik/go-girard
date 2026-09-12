@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go Girard — Self-hosted CRM for focused B2B outreach</title>
+  <meta name="description" content="Go Girard is a self-hosted CRM for focused B2B outreach and follow-ups. Keep relationship context, intentions and next actions in one small local app.">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="canonical" href="https://monjuik.github.io/go-girard/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Go Girard — Self-hosted CRM for focused B2B outreach">
+  <meta property="og:description" content="Remember the context. Know your intention. Take the next step.">
+  <meta property="og:url" content="https://monjuik.github.io/go-girard/">
+  <meta name="twitter:card" content="summary">
+
+  <!-- Pico CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+
+  <style>
+    :root {
+      --page-bg: #ffffff;
+      --soft-bg: #f5f5f7;
+      --ink: #1d1d1f;
+      --muted: #6e6e73;
+      --line: #d2d2d7;
+      --link: #0066cc;
+      --max: 1180px;
+      --reading: 780px;
+      --radius: 28px;
+      --pico-font-family-sans-serif: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif;
+      --pico-primary: #0066cc;
+      --pico-primary-hover: #004f9e;
+      --pico-primary-focus: rgba(0, 102, 204, .18);
+      --pico-border-radius: 14px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--page-bg);
+      font-size: 18px;
+      line-height: 1.55;
+      letter-spacing: -0.005em;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    a { color: var(--link); }
+    strong { color: var(--ink); }
+    code { white-space: nowrap; }
+
+    a[role="button"] {
+      display: inline-block;
+      padding: .78rem 1.2rem;
+      border: 1px solid var(--link);
+      background: var(--link);
+      color: #fff;
+      line-height: 1;
+      text-decoration: none;
+    }
+
+    a[role="button"].secondary.outline {
+      background: transparent;
+      color: var(--ink);
+      border-color: #86868b;
+    }
+
+    a[role="button"]:hover { filter: brightness(.92); }
+
+    .wrap {
+      width: min(calc(100% - 40px), var(--max));
+      margin-inline: auto;
+    }
+
+    .reading {
+      width: min(100%, var(--reading));
+      margin-inline: auto;
+    }
+
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255,255,255,.88);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,.08);
+    }
+
+    .site-nav nav {
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      color: var(--ink);
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .site-nav ul {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .site-nav li { margin: 0; padding: 0; }
+    .site-nav ul a { color: var(--ink); text-decoration: none; font-size: .9rem; }
+    .site-nav ul a:hover { color: var(--link); }
+
+    .hero {
+      padding: 110px 0 80px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: .98rem;
+      font-weight: 650;
+      letter-spacing: .01em;
+    }
+
+    h1 {
+      max-width: 940px;
+      margin: 0 auto 24px;
+      color: var(--ink);
+      font-size: clamp(3rem, 8vw, 6.8rem);
+      line-height: .96;
+      letter-spacing: -0.06em;
+      font-weight: 750;
+    }
+
+    h2 {
+      margin: 0 0 24px;
+      color: var(--ink);
+      font-size: clamp(2.2rem, 5vw, 4.8rem);
+      line-height: 1.02;
+      letter-spacing: -0.045em;
+      font-weight: 730;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      color: var(--ink);
+      font-size: 1.4rem;
+      letter-spacing: -0.02em;
+    }
+
+    .lede {
+      max-width: 780px;
+      margin: 0 auto;
+      color: var(--muted);
+      font-size: clamp(1.2rem, 2.5vw, 1.7rem);
+      line-height: 1.35;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 34px;
+    }
+
+    .actions a[role="button"] {
+      margin: 0;
+      min-width: 170px;
+      border-radius: 999px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .quiet {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+
+    section { padding: 96px 0; }
+    .soft { background: var(--soft-bg); }
+
+    .intro {
+      max-width: 800px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.25rem;
+    }
+
+    .two-col, .three-col {
+      display: grid;
+      gap: 20px;
+      margin-top: 44px;
+    }
+
+    .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .card {
+      margin: 0;
+      padding: 34px;
+      background: #fff;
+      border: 1px solid rgba(0,0,0,.07);
+      border-radius: var(--radius);
+      box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    }
+
+    .card p:last-child { margin-bottom: 0; }
+    .question { font-size: 1.55rem; line-height: 1.2; letter-spacing: -0.025em; }
+    .number { color: var(--muted); font-size: .85rem; font-weight: 700; letter-spacing: .08em; }
+
+    .product-shot { padding-top: 20px; }
+    figure { margin: 0; }
+    .shot {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 24px;
+      box-shadow: 0 28px 70px rgba(0,0,0,.14), 0 2px 10px rgba(0,0,0,.08);
+    }
+
+    figcaption {
+      max-width: 760px;
+      margin: 18px auto 0;
+      color: var(--muted);
+      text-align: center;
+      font-size: .92rem;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+      gap: 72px;
+    }
+
+    .split p { color: var(--muted); font-size: 1.12rem; }
+    .split .statement { color: var(--ink); font-size: 1.5rem; line-height: 1.35; }
+
+    .visual { padding: 0; background: var(--soft-bg); }
+    .visual .wrap { width: min(100%, 1440px); }
+    .visual img { display: block; width: 100%; height: auto; }
+
+    .ai-badge {
+      display: inline-block;
+      margin-bottom: 18px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: #e9f4ff;
+      color: #0057a8;
+      font-size: .84rem;
+      font-weight: 700;
+    }
+
+    .code-line {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      background: #ececef;
+      color: #424245;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: .88rem;
+    }
+
+    .security-note {
+      margin-top: 30px;
+      padding: 22px 24px;
+      border-left: 4px solid #d97706;
+      background: #fff8eb;
+      border-radius: 0 14px 14px 0;
+      color: #5a4309;
+    }
+
+    .security-note strong { color: #3f2f08; }
+
+    .steps {
+      margin: 36px 0 0;
+      padding-left: 1.35em;
+      font-size: 1.1rem;
+    }
+
+    .steps li { padding: 8px 0; }
+
+    .commercial {
+      padding: 64px;
+      border-radius: 34px;
+      background: #111;
+      color: #f5f5f7;
+    }
+
+    .commercial h2 { color: #fff; max-width: 800px; }
+    .commercial p { max-width: 760px; color: #c7c7cc; font-size: 1.15rem; }
+    .commercial .actions { justify-content: flex-start; }
+    .commercial a[role="button"] { background: #fff; border-color: #fff; color: #111; }
+
+    .faq details {
+      margin: 0;
+      padding: 22px 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .faq details:last-of-type { border-bottom: 1px solid var(--line); }
+    .faq summary { color: var(--ink); font-weight: 650; font-size: 1.08rem; }
+    .faq details p { max-width: 850px; color: var(--muted); }
+
+    footer {
+      padding: 44px 0 60px;
+      border-top: 1px solid rgba(0,0,0,.08);
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    footer .footer-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    footer a { color: inherit; }
+    footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
+
+    @media (max-width: 820px) {
+      body { font-size: 17px; }
+      .site-nav nav { min-height: 54px; }
+      .site-nav ul li:not(:last-child) { display: none; }
+      .hero { padding: 78px 0 58px; }
+      section { padding: 72px 0; }
+      .two-col, .three-col, .split { grid-template-columns: 1fr; }
+      .split { gap: 24px; }
+      .card { padding: 26px; }
+      .commercial { padding: 36px 26px; border-radius: 24px; }
+      .shot { border-radius: 16px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; }
+    }
+  </style>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Go Girard",
+    "url": "https://monjuik.github.io/go-girard/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "macOS, Linux",
+    "description": "A self-hosted CRM for focused B2B outreach and follow-ups.",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "downloadUrl": "https://github.com/monjuik/go-girard/releases/latest",
+    "codeRepository": "https://github.com/monjuik/go-girard"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is Go Girard?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Go Girard is a self-hosted CRM for personal B2B outreach and follow-ups. It keeps relationship context, intentions and next actions together so you can focus on the next conversation."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is Go Girard a CRM?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, if you mean a place to keep relationship context, intentions and follow-ups. It is deliberately lighter than a traditional CRM and does not try to automate communication."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Go Girard send emails or LinkedIn messages?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Go Girard helps you decide whom to contact and why. You remain responsible for the communication, whether it happens by email, LinkedIn, WhatsApp or phone."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where is my data stored?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Go Girard stores its data in a local SQLite database file. The current version is intended for local, single-user use."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use Go Girard with an AI assistant?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Go Girard exposes a read-only MCP endpoint that can provide due intentions and person context to an MCP-compatible AI tool."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is there a hosted version?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Not yet. A hosted version and commercial support are being considered. Use GitHub Discussions to describe what would be useful to you."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <header class="site-nav">
+    <div class="wrap">
+      <nav aria-label="Primary navigation">
+        <a class="brand" href="#top">Go Girard</a>
+        <ul>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#ai">AI</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="https://github.com/monjuik/go-girard" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Self-hosted CRM for focused B2B outreach</p>
+        <h1>Stay focused on the next conversation.</h1>
+        <p class="lede">Go Girard keeps the context, intention and next action for every person you’re reaching out to. You decide what to say — and where to say it.</p>
+        <div class="actions">
+          <a href="https://github.com/monjuik/go-girard/releases/latest" role="button" target="_blank" rel="noopener">Download Go Girard</a>
+          <a href="https://github.com/monjuik/go-girard" role="button" class="secondary outline" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+        <p class="quiet">Free and open source</p>
+      </div>
+    </section>
+
+    <section class="soft">
+      <div class="wrap">
+        <div class="reading">
+          <h2>Two questions. That’s the job.</h2>
+          <p class="intro">During a focused outreach or follow-up session, Go Girard helps you answer one of two questions.</p>
+        </div>
+        <div class="two-col">
+          <article class="card">
+            <p class="number">01</p>
+            <h3 class="question">What should I handle today?</h3>
+            <p>See the follow-ups that are due, choose one person, and work on one thing at a time.</p>
+          </article>
+          <article class="card">
+            <p class="number">02</p>
+            <h3 class="question">What’s the context with this person?</h3>
+            <p>Open the person card and get back to the history, notes, intention and next step.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="product-shot">
+      <div class="wrap">
+        <figure>
+            <img
+              class="shot"
+              src="person-saitama.png"
+              width="2048"
+              height="1315"
+              loading="eager"
+              alt="Go Girard person card showing Saitama as a demo contact, an active follow-up intention, notes and to-do items"
+            >
+        </figure>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap split">
+        <div>
+          <h2>Keep what matters.</h2>
+        </div>
+        <div>
+          <p class="statement">There are enough distractions already. You shouldn’t have to decide what belongs in <code>fax</code>, <code>client segment</code> or <code>journey stage</code> before you can remember something useful.</p>
+          <p>In Go Girard, notes are just notes. Keep the pains, facts, history, ideas, promises and anything else that can help in the next conversation. Notes support Markdown. Thank you, John Gruber!</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="soft">
+      <div class="wrap split">
+        <div>
+          <h2>Focus. Do more.</h2>
+        </div>
+        <div>
+          <p class="statement">A campaign gives you guidance. The follow-up queue brings the right person back when it’s time.</p>
+          <p>Pick one person. Read the context. Know the intention. Take the next step. Everything else can wait.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap split">
+        <div>
+          <h2>You do the talking.</h2>
+        </div>
+        <div>
+          <p class="statement">Go Girard doesn’t send emails or automate LinkedIn messages. On purpose.</p>
+          <p>Sometimes the next conversation is an email. Sometimes it’s LinkedIn, WhatsApp or a phone call. Go Girard remembers why you want to reach out and what happened before. The communication stays yours.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="visual" aria-label="Stay on course">
+      <div class="wrap">
+          <img
+            src="infographic.jpeg"
+            width="1080"
+            height="809"
+            loading="lazy"
+            alt="Aerial view of a sailboat in turquoise water with the words Stay on course, Remember the context, Know your intention, Take the next step"
+          >
+      </div>
+    </section>
+
+    <section id="ai">
+      <div class="wrap split">
+        <div>
+          <span class="ai-badge">Read-only MCP</span>
+          <h2>AI, with the right context.</h2>
+        </div>
+        <div>
+          <p class="statement">Your AI tool can ask what is due, load a person’s context and help you prepare the next outreach.</p>
+          <p>Go Girard exposes a read-only MCP endpoint. The AI can use the person’s notes, company, campaign and current intention as context. It can suggest a concrete next action or draft a message for your review.</p>
+          <span class="code-line">http://localhost:8080/mcp</span>
+          <p><small><a href="https://github.com/monjuik/go-girard#mcp" target="_blank" rel="noopener">MCP setup and suggested instructions →</a></small></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="soft">
+      <div class="wrap">
+        <div class="reading">
+          <p class="eyebrow">A small mental model</p>
+          <h2>How it works.</h2>
+        </div>
+        <div class="three-col">
+          <article class="card">
+            <p class="number">01</p>
+            <h3>Person notes</h3>
+            <p>Keep context, history, pains, facts, and ideas for every person you’re reaching out to.</p>
+          </article>
+          <article class="card">
+            <p class="number">02</p>
+            <h3>Campaign guidance</h3>
+            <p>A step has meaning: what you are trying to achieve and what your future self should remember.</p>
+          </article>
+          <article class="card">
+            <p class="number">03</p>
+            <h3>Today’s follow-ups</h3>
+            <p>See the active intentions that are due, choose one, and get back to the conversation.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap split">
+        <div>
+          <h2>One binary. SQLite. A config file.</h2>
+        </div>
+        <div>
+          <p class="statement">Go Girard is small enough to understand and run yourself.</p>
+          <p>The current version is intended for local, single-user use. Data is stored in SQLite. Campaigns are configured in <code>config.json</code> and read at startup. Run one binary and open the web UI in your browser.</p>
+          <div class="security-note"><strong>Current limitation:</strong> Go Girard has no user management or authorisation, and its MCP endpoint has no authentication. Don’t expose the current version to the public internet.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="soft" id="get-started">
+      <div class="wrap split">
+        <div>
+          <h2>Get started.</h2>
+        </div>
+        <div>
+          <ol class="steps">
+            <li><a href="https://github.com/monjuik/go-girard/releases/latest" target="_blank" rel="noopener">Download a release</a> for macOS or Linux, or build it from source.</li>
+            <li>Add a campaign to <code>config.json</code>.</li>
+            <li>Start <code>go-girard</code>.</li>
+            <li>Open <code>http://localhost:8080/</code> in your browser.</li>
+          </ol>
+          <p><a href="https://github.com/monjuik/go-girard#running" target="_blank" rel="noopener">Read the full running instructions →</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap split">
+        <div>
+          <p class="eyebrow">A slightly strange name, isn't it?</p>
+          <h2>Why Go Girard?</h2>
+        </div>
+        <div>
+          <p class="statement">I started Go Girard from scratch in 2026 because I couldn’t find a tool that matched the way I do focused outreach.</p>
+          <p>The app is inspired by Joe Girard’s customer card system and his book <cite>How to Sell Anything to Anybody</cite>. The idea is simple: remember the person, not just the transaction. And, yes, the app is written in Go.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="commercial">
+          <p class="eyebrow" style="color:#9f9fa5">A possible next chapter</p>
+          <h2>Want Go Girard without running it yourself?</h2>
+          <p>I’m considering a hosted version and commercial support for small teams. If that would be useful to you, tell me what you need.</p>
+          <div class="actions">
+            <a href="https://github.com/monjuik/go-girard/discussions" role="button" target="_blank" rel="noopener">Start a discussion</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="faq soft">
+      <div class="wrap">
+        <div class="reading" style="margin-left:0">
+          <p class="eyebrow">FAQ</p>
+          <h2>A few reasonable questions.</h2>
+        </div>
+
+        <details>
+          <summary>What is Go Girard?</summary>
+          <p>Go Girard is a self-hosted CRM for personal B2B outreach and follow-ups. It keeps relationship context, intentions and next actions together, so you can focus on the next conversation instead of reconstructing it.</p>
+        </details>
+
+        <details>
+          <summary>Is Go Girard a CRM?</summary>
+          <p>Yes, if by CRM you mean a place to keep relationship context, intentions and follow-ups. No, if you expect pipeline dashboards, automated sequences and dozens of required fields. Go Girard is deliberately smaller.</p>
+        </details>
+
+        <details>
+          <summary>Does it send emails or LinkedIn messages?</summary>
+          <p>No. Go Girard helps you decide whom to contact and why. You remain responsible for the communication, whether it happens by email, LinkedIn, WhatsApp or phone.</p>
+        </details>
+
+        <details>
+          <summary>Where is my data stored?</summary>
+          <p>In a local SQLite database file.</p>
+        </details>
+
+        <details>
+          <summary>Can I use it with ChatGPT or another AI assistant?</summary>
+          <p>If your AI tool can connect to MCP over Streamable HTTP, it can use Go Girard’s read-only MCP endpoint. The endpoint provides due intentions and person context. It does not let the AI modify Go Girard data.</p>
+        </details>
+
+        <details>
+          <summary>Is Go Girard multi-user?</summary>
+          <p>Not today. The current version has no user management or authorisation and is intended for local use. This may change in the future.</p>
+        </details>
+
+        <details>
+          <summary>Does it work on macOS and Linux? And Windows?</summary>
+          <p>Yes. The release page provides binaries for macOS and Linux. You can also build Go Girard from source.</p>
+        </details>
+
+        <details>
+          <summary>Is there a hosted version or commercial support?</summary>
+          <p>Not yet as a standard offering. I’m exploring both. If you would pay for hosting, setup help or support for a small team, <a href="https://github.com/monjuik/go-girard/discussions" target="_blank" rel="noopener">tell me about your use case in Discussions</a>.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-row">
+      <span>Go Girard · Self-hosted B2B outreach CRM</span>
+      <nav aria-label="Footer links">
+        <a href="https://github.com/monjuik/go-girard" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/monjuik/go-girard/releases/latest" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/monjuik/go-girard/discussions" target="_blank" rel="noopener">Discussions</a>
+        <a href="https://github.com/monjuik/go-girard/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
